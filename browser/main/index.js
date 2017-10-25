@@ -27,7 +27,10 @@ document.addEventListener('click', function (e) {
   const className = e.target.className
   if (!className && typeof (className) !== 'string') return
   const isInfoButton = className.includes('infoButton')
-  const isInfoPanel = e.target.offsetParent.className.includes('infoPanel')
+  const offsetParent = e.target.offsetParent
+  const isInfoPanel = offsetParent !== null
+    ? offsetParent.className.includes('infoPanel')
+    : false
   if (isInfoButton || isInfoPanel) return
   const infoPanel = document.querySelector('.infoPanel')
   if (infoPanel) infoPanel.style.display = 'none'
@@ -62,6 +65,11 @@ ReactDOM.render((
         <Route path='starred' />
         <Route path='searched' />
         <Route path='trashed' />
+        <Route path='alltags' />
+        <Route path='tags'>
+          <IndexRedirect to='/alltags' />
+          <Route path=':tagname' />
+        </Route>
         <Route path='storages'>
           <IndexRedirect to='/home' />
           <Route path=':storageKey'>

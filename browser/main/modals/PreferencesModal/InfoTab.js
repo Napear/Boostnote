@@ -74,9 +74,9 @@ class InfoTab extends React.Component {
             >Boostnote Shop</a> : Products are shipped to all over the world 🌏
           </li>
           <li>
-            <a href='https://salt.bountysource.com/teams/boostnote'
+            <a href='https://opencollective.com/boostnoteio'
               onClick={(e) => this.handleLinkClick(e)}
-            >Donate via Bountysource</a> : Thank you for your support 🎉
+            >Crowdfunding</a> : Thank you for your support 🎉
           </li>
           <li>
             <a href='https://github.com/BoostIO/Boostnote/issues'
@@ -97,9 +97,9 @@ class InfoTab extends React.Component {
         </ul>
         <hr />
         <div styleName='policy'>Data collection policy</div>
-        <p>We collect only the number of DAU for Boostnote and DO NOT collect any detail information</p>
-        <p>such as your note content. You can see how it works on <a href='https://github.com/BoostIO/Boostnote' onClick={(e) => this.handleLinkClick(e)}>GitHub</a>.</p>
-        <p>These data are only used for Boostnote improvements.</p>
+        <div>We collect only the number of DAU for Boostnote and **DO NOT collect** any detail information such as your note content.</div>
+        <div>You can see how it works on <a href='https://github.com/BoostIO/Boostnote' onClick={(e) => this.handleLinkClick(e)}>GitHub</a>.</div>
+        <div>This data is only used for Boostnote improvements.</div>
         <input onChange={(e) => this.handleConfigChange(e)}
           checked={this.state.config.amaEnabled}
           ref='amaEnabled'

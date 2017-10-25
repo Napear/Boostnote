@@ -20,6 +20,7 @@ import InfoPanel from './InfoPanel'
 import InfoPanelTrashed from './InfoPanelTrashed'
 import { formatDate } from 'browser/lib/date-formatter'
 import { getTodoPercentageOfCompleted } from 'browser/lib/getTodoStatus'
+import striptags from 'striptags'
 
 const electron = require('electron')
 const { remote } = electron
@@ -76,7 +77,7 @@ class MarkdownNoteDetail extends React.Component {
 
     note.content = this.refs.content.value
     if (this.refs.tags) note.tags = this.refs.tags.value
-    note.title = markdown.strip(findNoteTitle(note.content))
+    note.title = markdown.strip(striptags(findNoteTitle(note.content)))
     note.updatedAt = new Date()
 
     this.setState({
@@ -255,6 +256,10 @@ class MarkdownNoteDetail extends React.Component {
     if (infoPanel.style) infoPanel.style.display = infoPanel.style.display === 'none' ? 'inline' : 'none'
   }
 
+  print (e) {
+    ee.emit('print')
+  }
+
   render () {
     let { data, config, location } = this.props
     let { note } = this.state
@@ -340,7 +345,7 @@ class MarkdownNoteDetail extends React.Component {
         <button styleName='control-fullScreenButton'
           onMouseDown={(e) => this.handleFullScreenButton(e)}
         >
-          <i className='fa fa-expand' styleName='fullScreen-button' />
+          <i className='fa fa-window-maximize' styleName='fullScreen-button' />
         </button>
         <InfoButton
           onClick={(e) => this.handleInfoButtonClick(e)}
@@ -354,8 +359,9 @@ class MarkdownNoteDetail extends React.Component {
           exportAsMd={this.exportAsMd}
           exportAsTxt={this.exportAsTxt}
           wordCount={note.content.split(' ').length}
-          letterCount={note.content.length}
+          letterCount={note.content.replace(/\r?\n/g, '').length}
           type={note.type}
+          print={this.print}
         />
       </div>
     </div>

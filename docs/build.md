@@ -1,10 +1,11 @@
 # Build
+This page is also available in [Japanese](https://github.com/BoostIO/Boostnote/blob/master/docs/jp/build.md), [Korean](https://github.com/BoostIO/Boostnote/blob/master/docs/ko/build.md), [Russain](https://github.com/BoostIO/Boostnote/blob/master/docs/ru/build.md), and [Simplified Chinese](https://github.com/BoostIO/Boostnote/blob/master/docs/zh_CN/build.md).
 
 ## Environments
 * npm: 4.x
 * node: 7.x
 
-You should use `npm v4.x` because `$ grand pre-build` fails on `v5.x`.
+You should use `npm v4.x` because `$ grunt pre-build` fails on `v5.x`.
 
 ## Development
 

@@ -266,11 +266,16 @@ class SnippetNoteDetail extends React.Component {
   }
 
   renameSnippetByIndex (index, name) {
-    let snippets = this.state.note.snippets.slice()
+    const snippets = this.state.note.snippets.slice()
     snippets[index].name = name
-    let syntax = CodeMirror.findModeByFileName(name.trim())
-    let mode = syntax != null ? syntax.name : null
-    if (mode != null) snippets[index].mode = mode
+    const syntax = CodeMirror.findModeByFileName(name.trim())
+    const mode = syntax != null ? syntax.name : null
+    if (mode != null) {
+      snippets[index].mode = mode
+      AwsMobileAnalyticsConfig.recordDynamicCustomEvent('SNIPPET_LANG', {
+        name: mode
+      })
+    }
     this.setState({note: Object.assign(this.state.note, {snippets: snippets})})
 
     this.setState({
@@ -290,6 +295,10 @@ class SnippetNoteDetail extends React.Component {
         note: this.state.note
       }, () => {
         this.save()
+      })
+
+      AwsMobileAnalyticsConfig.recordDynamicCustomEvent('SELECT_LANG', {
+        name
       })
     }
   }
@@ -598,7 +607,7 @@ class SnippetNoteDetail extends React.Component {
         <button styleName='control-fullScreenButton'
           onMouseDown={(e) => this.handleFullScreenButton(e)}
         >
-          <i className='fa fa-expand' styleName='fullScreen-button' />
+          <i className='fa fa-window-maximize' styleName='fullScreen-button' />
         </button>
         <InfoButton
           onClick={(e) => this.handleInfoButtonClick(e)}

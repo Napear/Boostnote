@@ -13,6 +13,8 @@ import fs from 'fs'
 import { hashHistory } from 'react-router'
 import markdown from 'browser/lib/markdown'
 import { findNoteTitle } from 'browser/lib/findNoteTitle'
+import stripgtags from 'striptags'
+import store from 'browser/main/store'
 
 const { remote } = require('electron')
 const { Menu, MenuItem, dialog } = remote
@@ -51,6 +53,8 @@ class NoteList extends React.Component {
 
     this.state = {
     }
+
+    this.contextNotes = []
   }
 
   componentDidMount () {
@@ -89,6 +93,7 @@ class NoteList extends React.Component {
 
     if (this.notes.length > 0 && location.query.key == null) {
       let { router } = this.context
+      if (!location.pathname.match(/\/searched/)) this.contextNotes = this.getContextNotes()
       router.replace({
         pathname: location.pathname,
         query: {
@@ -100,9 +105,7 @@ class NoteList extends React.Component {
 
     // Auto scroll
     if (_.isString(location.query.key) && prevProps.location.query.key === location.query.key) {
-      let targetIndex = _.findIndex(this.notes, (note) => {
-        return note != null && note.storage + '-' + note.key === location.query.key
-      })
+      const targetIndex = this.getTargetIndex()
       if (targetIndex > -1) {
         let list = this.refs.list
         let item = list.childNodes[targetIndex]
@@ -128,9 +131,7 @@ class NoteList extends React.Component {
     let { router } = this.context
     let { location } = this.props
 
-    let targetIndex = _.findIndex(this.notes, (note) => {
-      return note.storage + '-' + note.key === location.query.key
-    })
+    let targetIndex = this.getTargetIndex()
 
     if (targetIndex === 0) {
       return
@@ -153,9 +154,7 @@ class NoteList extends React.Component {
     let { router } = this.context
     let { location } = this.props
 
-    let targetIndex = _.findIndex(this.notes, (note) => {
-      return note.storage + '-' + note.key === location.query.key
-    })
+    let targetIndex = this.getTargetIndex()
 
     if (targetIndex === this.notes.length - 1) {
       targetIndex = 0
@@ -183,9 +182,7 @@ class NoteList extends React.Component {
     const { router } = this.context
     const { location } = this.props
 
-    let targetIndex = _.findIndex(this.notes, (note) => {
-      return note.storage + '-' + note.key === noteHash
-    })
+    let targetIndex = this.getTargetIndex()
 
     if (targetIndex < 0) targetIndex = 0
 
@@ -232,49 +229,67 @@ class NoteList extends React.Component {
     let { data, params, location } = this.props
     let { router } = this.context
 
-    if (location.pathname.match(/\/home/)) {
-      return data.noteMap.map((note) => note)
+    if (location.pathname.match(/\/home/) || location.pathname.match(/\alltags/)) {
+      const allNotes = data.noteMap.map((note) => note)
+      this.contextNotes = allNotes
+      return allNotes
     }
 
     if (location.pathname.match(/\/starred/)) {
-      return data.starredSet.toJS()
-        .map((uniqueKey) => data.noteMap.get(uniqueKey))
+      const starredNotes = data.starredSet.toJS().map((uniqueKey) => data.noteMap.get(uniqueKey))
+      this.contextNotes = starredNotes
+      return starredNotes
     }
 
     if (location.pathname.match(/\/searched/)) {
       const searchInputText = document.getElementsByClassName('searchInput')[0].value
       if (searchInputText === '') {
-        router.push('/home')
+        return this.sortByPin(this.contextNotes)
       }
-      return searchFromNotes(this.notes, searchInputText)
+      return searchFromNotes(this.contextNotes, searchInputText)
     }
 
     if (location.pathname.match(/\/trashed/)) {
-      return data.trashedSet.toJS()
-        .map((uniqueKey) => data.noteMap.get(uniqueKey))
+      const trashedNotes = data.trashedSet.toJS().map((uniqueKey) => data.noteMap.get(uniqueKey))
+      this.contextNotes = trashedNotes
+      return trashedNotes
     }
 
-    let storageKey = params.storageKey
-    let folderKey = params.folderKey
-    let storage = data.storageMap.get(storageKey)
-    if (storage == null) return []
-
-    let folder = _.find(storage.folders, {key: folderKey})
-    if (folder == null) {
-      let storageNoteSet = data.storageNoteMap
-        .get(storage.key)
-      if (storageNoteSet == null) storageNoteSet = []
-      return storageNoteSet
-        .map((uniqueKey) => data.noteMap.get(uniqueKey))
+    if (location.pathname.match(/\/tags/)) {
+      return data.noteMap.map(note => {
+        return note
+      }).filter(note => {
+        return note.tags.includes(params.tagname)
+      })
     }
 
-    let folderNoteKeyList = data.folderNoteMap
-      .get(storage.key + '-' + folder.key)
+    return this.getContextNotes()
+  }
 
-    return folderNoteKeyList != null
-      ? folderNoteKeyList
-        .map((uniqueKey) => data.noteMap.get(uniqueKey))
-      : []
+  // get notes in the current folder
+  getContextNotes () {
+    const { data, params } = this.props
+    const storageKey = params.storageKey
+    const folderKey = params.folderKey
+    const storage = data.storageMap.get(storageKey)
+    if (storage === undefined) return []
+
+    const folder = _.find(storage.folders, {key: folderKey})
+    if (folder === undefined) {
+      const storageNoteSet = data.storageNoteMap.get(storage.key) || []
+      return storageNoteSet.map((uniqueKey) => data.noteMap.get(uniqueKey))
+    }
+
+    const folderNoteKeyList = data.folderNoteMap.get(`${storage.key}-${folder.key}`) || []
+    return folderNoteKeyList.map((uniqueKey) => data.noteMap.get(uniqueKey))
+  }
+
+  sortByPin (unorderedNotes) {
+    const pinnedNotes = unorderedNotes.filter((note) => {
+      return note.isPinned
+    })
+
+    return pinnedNotes.concat(unorderedNotes)
   }
 
   handleNoteClick (e, uniqueKey) {
@@ -318,10 +333,7 @@ class NoteList extends React.Component {
   }
 
   alertIfSnippet () {
-    let { location } = this.props
-    const targetIndex = _.findIndex(this.notes, (note) => {
-      return `${note.storage}-${note.key}` === location.query.key
-    })
+    const targetIndex = this.getTargetIndex()
     if (this.notes[targetIndex].type === 'SNIPPET_NOTE') {
       dialog.showMessageBox(remote.getCurrentWindow(), {
         type: 'warning',
@@ -337,6 +349,53 @@ class NoteList extends React.Component {
     e.dataTransfer.setData('note', noteData)
   }
 
+  handleNoteContextMenu (e, uniqueKey) {
+    const { location } = this.props
+    const targetIndex = this.getTargetIndex()
+    let note = this.notes[targetIndex]
+    const label = note.isPinned ? 'Remove pin' : 'Pin to Top'
+
+    let menu = new Menu()
+    if (!location.pathname.match(/\/home|\/starred|\/trash/)) {
+      menu.append(new MenuItem({
+        label: label,
+        click: (e) => this.pinToTop(e, uniqueKey)
+      }))
+    }
+    menu.append(new MenuItem({
+      label: 'Delete Note',
+      click: (e) => this.deleteNote(e, uniqueKey)
+    }))
+    menu.popup()
+  }
+
+  pinToTop (e, uniqueKey) {
+    const { data, params } = this.props
+    const storageKey = params.storageKey
+    const folderKey = params.folderKey
+
+    const currentStorage = data.storageMap.get(storageKey)
+    const currentFolder = _.find(currentStorage.folders, {key: folderKey})
+
+    const targetIndex = this.getTargetIndex()
+    let note = this.notes[targetIndex]
+    note.isPinned = !note.isPinned
+
+    dataApi
+      .updateNote(note.storage, note.key, note)
+      .then((note) => {
+        store.dispatch({
+          type: 'UPDATE_NOTE',
+          note: note
+        })
+      })
+  }
+
+  deleteNote (e, uniqueKey) {
+    this.handleNoteClick(e, uniqueKey)
+    ee.emit('detail:delete')
+  }
+
   importFromFile () {
     const { dispatch, location } = this.props
 
@@ -347,39 +406,59 @@ class NoteList extends React.Component {
       properties: ['openFile', 'multiSelections']
     }
 
-    const targetIndex = _.findIndex(this.notes, (note) => {
-      return note !== null && `${note.storage}-${note.key}` === location.query.key
+    dialog.showOpenDialog(remote.getCurrentWindow(), options, (filepaths) => {
+      this.addNotesFromFiles(filepaths)
     })
+  }
+
+  handleDrop (e) {
+    e.preventDefault()
+    const { location } = this.props
+    const filepaths = Array.from(e.dataTransfer.files).map(file => { return file.path })
+    if (!location.pathname.match(/\/trashed/)) this.addNotesFromFiles(filepaths)
+  }
+
+  // Add notes to the current folder
+  addNotesFromFiles (filepaths) {
+    const { dispatch, location } = this.props
+
+    const targetIndex = this.getTargetIndex()
 
     const storageKey = this.notes[targetIndex].storage
     const folderKey = this.notes[targetIndex].folder
 
-    dialog.showOpenDialog(remote.getCurrentWindow(), options, (filepaths) => {
-      if (filepaths === undefined) return
-      filepaths.forEach((filepath) => {
-        fs.readFile(filepath, (err, data) => {
-          if (err) throw Error('File reading error: ', err)
-          const content = data.toString()
-          const newNote = {
-            content: content,
-            folder: folderKey,
-            title: markdown.strip(findNoteTitle(content)),
-            type: 'MARKDOWN_NOTE'
-          }
-          dataApi.createNote(storageKey, newNote)
-          .then((note) => {
-            dispatch({
-              type: 'UPDATE_NOTE',
-              note: note
-            })
-            hashHistory.push({
-              pathname: location.pathname,
-              query: {key: `${note.storage}-${note.key}`}
-            })
+    if (filepaths === undefined) return
+    filepaths.forEach((filepath) => {
+      fs.readFile(filepath, (err, data) => {
+        if (err) throw Error('File reading error: ', err)
+        const content = data.toString()
+        const newNote = {
+          content: content,
+          folder: folderKey,
+          title: markdown.strip(findNoteTitle(content)),
+          type: 'MARKDOWN_NOTE'
+        }
+        dataApi.createNote(storageKey, newNote)
+        .then((note) => {
+          dispatch({
+            type: 'UPDATE_NOTE',
+            note: note
+          })
+          hashHistory.push({
+            pathname: location.pathname,
+            query: {key: `${note.storage}-${note.key}`}
           })
         })
       })
     })
+  }
+
+  getTargetIndex () {
+    const { location } = this.props
+    const targetIndex = _.findIndex(this.notes, (note) => {
+      return `${note.storage}-${note.key}` === location.query.key
+    })
+    return targetIndex
   }
 
   render () {
@@ -389,12 +468,13 @@ class NoteList extends React.Component {
       : config.sortBy === 'ALPHABETICAL'
       ? sortByAlphabetical
       : sortByUpdatedAt
-    this.notes = notes = this.getNotes()
-      .sort(sortFunc)
-      .filter((note) => {
-        // this is for the trash box
-        if (note.isTrashed !== true || location.pathname === '/trashed') return true
-      })
+    const sortedNotes = location.pathname.match(/\/home|\/starred|\/trash/)
+        ? this.getNotes().sort(sortFunc)
+        : this.sortByPin(this.getNotes().sort(sortFunc))
+    this.notes = notes = sortedNotes.filter((note) => {
+      // this is for the trash box
+      if (note.isTrashed !== true || location.pathname === '/trashed') return true
+    })
 
     let noteList = notes
       .map(note => {
@@ -417,8 +497,10 @@ class NoteList extends React.Component {
               note={note}
               dateDisplay={dateDisplay}
               key={key}
+              handleNoteContextMenu={this.handleNoteContextMenu.bind(this)}
               handleNoteClick={this.handleNoteClick.bind(this)}
               handleDragStart={this.handleDragStart.bind(this)}
+              pathname={location.pathname}
             />
           )
         }
@@ -438,16 +520,17 @@ class NoteList extends React.Component {
       <div className='NoteList'
         styleName='root'
         style={this.props.style}
+        onDrop={(e) => this.handleDrop(e)}
       >
         <div styleName='control'>
           <div styleName='control-sortBy'>
-            <i className='fa fa-bolt' />
+            <i className='fa fa-angle-down' />
             <select styleName='control-sortBy-select'
               value={config.sortBy}
               onChange={(e) => this.handleSortByChange(e)}
             >
-              <option value='UPDATED_AT'>Last Updated</option>
-              <option value='CREATED_AT'>Creation Time</option>
+              <option value='UPDATED_AT'>Updated</option>
+              <option value='CREATED_AT'>Created</option>
               <option value='ALPHABETICAL'>Alphabetically</option>
             </select>
           </div>

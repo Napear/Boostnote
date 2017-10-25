@@ -4,59 +4,81 @@
   background-color #f9f9f9
   user-select none
   color $ui-text-color
+  height: 100vh
+  display: flex
+  flex-direction column
 
 .top
-  height $topBar-height
+  padding-bottom 15px
 
 .top-menu
   navButtonColor()
-  height $topBar-height
-  padding 0 15px
-  font-size 12px
-  width 100%
-  text-align left
+  position absolute
+  top 22px
+  right 5px
+  height 23px
+  width 2em
   &:hover
     color $ui-text-color
   &:active, &:active:hover
     color $ui-text-color
     background-color alpha($ui-button--active-backgroundColor, 20%)
 
+.switch-buttons
+  background-color transparent
+  border 1px solid $ui-borderColor
+  width 110px
+  height 25px
+  margin 20px auto 0px auto
+  border-radius 1px
+
+.non-active-button
+  navButtonColor()
+  font-weight 600
+  width 54px
+  height 23px
+
+.active-button
+  @extend .non-active-button
+  background-color $ui-button--active-backgroundColor
+  color $ui-text-color
+  &:hover
+    background-color alpha($ui-button--active-backgroundColor, 70%)
+    color alpha($ui-text-color, 70%)
+  &:active, &:active:hover
+    background-color $ui-button--active-backgroundColor
+
 .top-menu-label
   margin-left 5px
   overflow ellipsis
+  opacity 0
 
-.storageList
-  absolute left right
-  bottom 37px
-  top 160px
+.tabBody
+  flex 1
+  display flex
+  flex-direction column
+
+.tag-title
+  padding-left 15px
+  padding-bottom 13px
+  p
+    color $ui-text-color
+
+.tagList
   overflow-y auto
-
-.storageList-empty
-  padding 0 10px
-  margin-top 15px
-  line-height 24px
-  color $ui-inactive-text-color
-
-.navToggle
-  navButtonColor()
-  display block
-  position absolute
-  right 5px
-  bottom 5px
-  border-radius 16.5px
-  height 34px
-  width 34px
-  line-height 32px
-  padding 0
+  flex: 1
 
 .root--folded
-  @extend .root
-  width 44px
-  .storageList-empty
-    white-space nowrap
-    transform rotate(90deg)
+  height 100vh
+  width $sideNav--folded-width
+  .switch-buttons
+    display none
+  .top
+    height 60px
   .top-menu
-    width 44px - 1
+    position static
+    width $sideNav--folded-width
+    height 60px
     text-align center
     &:hover .top-menu-label
       transition opacity 0.15s
@@ -65,7 +87,7 @@
     position fixed
     display inline-block
     height 30px
-    left 32px
+    left $sideNav--folded-width
     padding 0 10px
     margin-top -8px
     opacity 0
@@ -78,30 +100,6 @@
     border-top-right-radius 2px
     border-bottom-right-radius 2px
     pointer-events none
-    font-size 12px
-  .menu-button, .menu-button--active
-    text-align center
-    &:hover .menu-button-label
-      transition opacity 0.15s
-      opacity 1
-
-  .menu-button-label
-    position fixed
-    display inline-block
-    height 32px
-    left 44px
-    padding 0 10px
-    margin-top -8px
-    margin-left 0
-    overflow ellipsis
-    background-color $ui-tooltip-backgroundColor
-    z-index 10
-    color white
-    line-height 32px
-    border-top-right-radius 2px
-    border-bottom-right-radius 2px
-    pointer-events none
-    opacity 0
     font-size 12px
 
 body[data-theme="dark"]
@@ -120,11 +118,26 @@ body[data-theme="dark"]
     &:hover
       background-color alpha($ui-dark-button--active-backgroundColor, 20%)
 
-  .storageList-empty
-    color $ui-dark-inactive-text-color
+  .switch-buttons
+    border-color $ui-dark-borderColor
 
-  .navToggle
+  .non-active-button
+    navDarkButtonColor()
+
+  .active-button
+    @extend .non-active-button
+    background-color $ui-dark-button--active-backgroundColor
+    color $ui-dark-text-color
     &:hover
-      background-color alpha($ui-dark-button--active-backgroundColor, 20%)
-      transition 0.15s
+      background-color alpha($ui-dark-button--active-backgroundColor, 70%)
+      color alpha($ui-dark-text-color, 70%)
+    &:active
       color $ui-dark-text-color
+      background-color alpha($ui-dark-button--active-backgroundColor, 60%)
+    &:active, &:active:hover
+      color $ui-dark-text-color
+      background-color $ui-dark-button--active-backgroundColor
+
+  .tag-title
+    p
+      color alpha($ui-dark-text-color, 60%)

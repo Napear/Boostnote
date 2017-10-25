@@ -36,6 +36,7 @@ class UiTab extends React.Component {
     const newConfig = {
       ui: {
         theme: this.refs.uiTheme.value,
+        showCopyNotification: this.refs.showCopyNotification.checked,
         disableDirectWrite: this.refs.uiD2w != null
           ? this.refs.uiD2w.checked
           : false
@@ -60,7 +61,7 @@ class UiTab extends React.Component {
     const newCodemirrorTheme = this.refs.editorTheme.value
 
     if (newCodemirrorTheme !== codemirrorTheme) {
-      checkHighLight.setAttribute('href', `../node_modules/codemirror/theme/${newCodemirrorTheme}.css`)
+      checkHighLight.setAttribute('href', `../node_modules/codemirror/theme/${newCodemirrorTheme.split(' ')[0]}.css`)
     }
 
     this.setState({ config: newConfig, codemirrorTheme: newCodemirrorTheme })
@@ -90,9 +91,8 @@ class UiTab extends React.Component {
         <div styleName='group'>
           <div styleName='group-header'>UI</div>
 
-          <div styleName='group-header2'>Theme</div>
-
           <div styleName='group-section'>
+            Color Theme
             <div styleName='group-section-control'>
               <select value={config.ui.theme}
                 onChange={(e) => this.handleUIChange(e)}
@@ -102,6 +102,16 @@ class UiTab extends React.Component {
                 <option value='dark'>Dark</option>
               </select>
             </div>
+          </div>
+          <div styleName='group-checkBoxSection'>
+            <label>
+              <input onChange={(e) => this.handleUIChange(e)}
+                checked={this.state.config.ui.showCopyNotification}
+                ref='showCopyNotification'
+                type='checkbox'
+              />&nbsp;
+              Show &quot;Saved to Clipboard&quot; notification when copying
+            </label>
           </div>
           {
             global.process.platform === 'win32'
