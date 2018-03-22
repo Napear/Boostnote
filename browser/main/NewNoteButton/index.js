@@ -1,12 +1,12 @@
-import React, { PropTypes } from 'react'
+import PropTypes from 'prop-types'
+import React from 'react'
 import CSSModules from 'browser/lib/CSSModules'
 import styles from './NewNoteButton.styl'
 import _ from 'lodash'
 import modal from 'browser/main/lib/modal'
 import NewNoteModal from 'browser/main/modals/NewNoteModal'
-import { hashHistory } from 'react-router'
 import eventEmitter from 'browser/main/lib/eventEmitter'
-import dataApi from 'browser/main/lib/dataApi'
+import i18n from 'browser/lib/i18n'
 
 const { remote } = require('electron')
 const { dialog } = remote
@@ -34,7 +34,7 @@ class NewNoteButton extends React.Component {
   }
 
   handleNewNoteButtonClick (e) {
-    const { config, location, dispatch } = this.props
+    const { location, dispatch } = this.props
     const { storage, folder } = this.resolveTargetFolder()
 
     modal.open(NewNoteModal, {
@@ -51,15 +51,15 @@ class NewNoteButton extends React.Component {
 
     // Find first storage
     if (storage == null) {
-      for (let kv of data.storageMap) {
+      for (const kv of data.storageMap) {
         storage = kv[1]
         break
       }
     }
 
-    if (storage == null) this.showMessageBox('No storage to create a note')
+    if (storage == null) this.showMessageBox(i18n.__('No storage to create a note'))
     const folder = _.find(storage.folders, {key: params.folderKey}) || storage.folders[0]
-    if (folder == null) this.showMessageBox('No folder to create a note')
+    if (folder == null) this.showMessageBox(i18n.__('No folder to create a note'))
 
     return {
       storage,
@@ -85,9 +85,9 @@ class NewNoteButton extends React.Component {
         <div styleName='control'>
           <button styleName='control-newNoteButton'
             onClick={(e) => this.handleNewNoteButtonClick(e)}>
-            <i className='fa fa-pencil-square-o' />
+            <img styleName='iconTag' src='../resources/icon/icon-newnote.svg' />
             <span styleName='control-newNoteButton-tooltip'>
-              Make a Note {OSX ? '⌘' : '^'} + n
+              {i18n.__('Make a note')} {OSX ? '⌘' : i18n.__('Ctrl')} + N
             </span>
           </button>
         </div>

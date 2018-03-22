@@ -1,7 +1,9 @@
-import React, { PropTypes } from 'react'
+import PropTypes from 'prop-types'
+import React from 'react'
 import CSSModules from 'browser/lib/CSSModules'
 import styles from './StarButton.styl'
 import _ from 'lodash'
+import i18n from 'browser/lib/i18n'
 
 class StarButton extends React.Component {
   constructor (props) {
@@ -31,7 +33,7 @@ class StarButton extends React.Component {
   }
 
   render () {
-    let { className } = this.props
+    const { className } = this.props
 
     return (
       <button className={_.isString(className)
@@ -45,14 +47,14 @@ class StarButton extends React.Component {
         onMouseDown={(e) => this.handleMouseDown(e)}
         onMouseUp={(e) => this.handleMouseUp(e)}
         onMouseLeave={(e) => this.handleMouseLeave(e)}
-        onClick={this.props.onClick}
-      >
-        <i styleName='icon'
-          className={this.state.isActive || this.props.isActive
-            ? 'fa fa-star'
-            : 'fa fa-star-o'
+        onClick={this.props.onClick}>
+        <img styleName='icon'
+          src={this.state.isActive || this.props.isActive
+            ? '../resources/icon/icon-starred.svg'
+            : '../resources/icon/icon-star.svg'
           }
         />
+        <span styleName='tooltip'>{i18n.__('Star')}</span>
       </button>
     )
   }

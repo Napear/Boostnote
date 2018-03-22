@@ -1,16 +1,18 @@
-import React, { PropTypes } from 'react'
+import PropTypes from 'prop-types'
+import React from 'react'
 import CSSModules from 'browser/lib/CSSModules'
 import dataApi from 'browser/main/lib/dataApi'
 import styles from './FolderList.styl'
 import store from 'browser/main/store'
 import FolderItem from './FolderItem'
-import { SortableContainer, arrayMove } from 'react-sortable-hoc'
+import { SortableContainer } from 'react-sortable-hoc'
+import i18n from 'browser/lib/i18n'
 
 class FolderList extends React.Component {
   render () {
-    let { storage, hostBoundingBox } = this.props
+    const { storage, hostBoundingBox } = this.props
 
-    let folderList = storage.folders.map((folder, index) => {
+    const folderList = storage.folders.map((folder, index) => {
       return <FolderItem key={folder.key}
         folder={folder}
         storage={storage}
@@ -23,7 +25,7 @@ class FolderList extends React.Component {
       <div styleName='folderList'>
         {folderList.length > 0
           ? folderList
-          : <div styleName='folderList-empty'>No Folders</div>
+          : <div styleName='folderList-empty'>{i18n.__('No Folders')}</div>
         }
       </div>
     )
@@ -53,7 +55,7 @@ class SortableFolderListComponent extends React.Component {
   constructor (props) {
     super(props)
     this.onSortEnd = ({oldIndex, newIndex}) => {
-      let { storage } = this.props
+      const { storage } = this.props
       dataApi
         .reorderFolder(storage.key, oldIndex, newIndex)
         .then((data) => {

@@ -1,7 +1,9 @@
-import React, { PropTypes } from 'react'
+import PropTypes from 'prop-types'
+import React from 'react'
 import CSSModules from 'browser/lib/CSSModules'
 import styles from './FolderSelect.styl'
 import _ from 'lodash'
+import i18n from 'browser/lib/i18n'
 
 class FolderSelect extends React.Component {
   constructor (props) {
@@ -73,8 +75,8 @@ class FolderSelect extends React.Component {
       case 9:
         if (e.shiftKey) {
           e.preventDefault()
-          let tabbable = document.querySelectorAll('a:not([disabled]), button:not([disabled]), input[type=text]:not([disabled]), [tabindex]:not([disabled]):not([tabindex="-1"])')
-          let previousEl = tabbable[Array.prototype.indexOf.call(tabbable, this.refs.root) - 1]
+          const tabbable = document.querySelectorAll('a:not([disabled]), button:not([disabled]), input[type=text]:not([disabled]), [tabindex]:not([disabled]):not([tabindex="-1"])')
+          const previousEl = tabbable[Array.prototype.indexOf.call(tabbable, this.refs.root) - 1]
           if (previousEl != null) previousEl.focus()
         }
     }
@@ -89,9 +91,9 @@ class FolderSelect extends React.Component {
   }
 
   handleSearchInputChange (e) {
-    let { folders } = this.props
-    let search = this.refs.search.value
-    let optionIndex = search.length > 0
+    const { folders } = this.props
+    const search = this.refs.search.value
+    const optionIndex = search.length > 0
       ? _.findIndex(folders, (folder) => {
         return folder.name.match(new RegExp('^' + _.escapeRegExp(search), 'i'))
       })
@@ -129,7 +131,7 @@ class FolderSelect extends React.Component {
 
   nextOption () {
     let { optionIndex } = this.state
-    let { folders } = this.props
+    const { folders } = this.props
 
     optionIndex++
     if (optionIndex >= folders.length) optionIndex = 0
@@ -140,7 +142,7 @@ class FolderSelect extends React.Component {
   }
 
   previousOption () {
-    let { folders } = this.props
+    const { folders } = this.props
     let { optionIndex } = this.state
 
     optionIndex--
@@ -152,10 +154,10 @@ class FolderSelect extends React.Component {
   }
 
   selectOption () {
-    let { folders } = this.props
-    let optionIndex = this.state.optionIndex
+    const { folders } = this.props
+    const optionIndex = this.state.optionIndex
 
-    let folder = folders[optionIndex]
+    const folder = folders[optionIndex]
     if (folder != null) {
       this.setState({
         status: 'FOCUS'
@@ -184,10 +186,10 @@ class FolderSelect extends React.Component {
   }
 
   render () {
-    let { className, data, value } = this.props
-    let splitted = value.split('-')
-    let storageKey = splitted.shift()
-    let folderKey = splitted.shift()
+    const { className, data, value } = this.props
+    const splitted = value.split('-')
+    const storageKey = splitted.shift()
+    const folderKey = splitted.shift()
     let options = []
     data.storageMap.forEach((storage, index) => {
       storage.folders.forEach((folder) => {
@@ -198,14 +200,14 @@ class FolderSelect extends React.Component {
       })
     })
 
-    let currentOption = options.filter((option) => option.storage.key === storageKey && option.folder.key === folderKey)[0]
+    const currentOption = options.filter((option) => option.storage.key === storageKey && option.folder.key === folderKey)[0]
 
     if (this.state.search.trim().length > 0) {
-      let filter = new RegExp('^' + _.escapeRegExp(this.state.search), 'i')
+      const filter = new RegExp('^' + _.escapeRegExp(this.state.search), 'i')
       options = options.filter((option) => filter.test(option.folder.name))
     }
 
-    let optionList = options
+    const optionList = options
       .map((option, index) => {
         return (
           <div styleName={index === this.state.optionIndex
@@ -248,7 +250,7 @@ class FolderSelect extends React.Component {
             <input styleName='search-input'
               ref='search'
               value={this.state.search}
-              placeholder='Folder...'
+              placeholder={i18n.__('Folder...')}
               onChange={(e) => this.handleSearchInputChange(e)}
               onBlur={(e) => this.handleSearchInputBlur(e)}
               onKeyDown={(e) => this.handleSearchInputKeyDown(e)}
@@ -259,12 +261,11 @@ class FolderSelect extends React.Component {
               {optionList}
             </div>
           </div>
-          : <div styleName='idle'>
+          : <div styleName='idle' style={{color: currentOption.folder.color}}>
             <div styleName='idle-label'>
-              <span styleName='idle-label-name'
-                style={{color: currentOption.folder.color}}
-              >
-                {currentOption.folder.name} /
+              <i className='fa fa-folder' />
+              <span styleName='idle-label-name'>
+                {currentOption.folder.name}
               </span>
             </div>
           </div>

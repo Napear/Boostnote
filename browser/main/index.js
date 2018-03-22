@@ -8,6 +8,7 @@ import { Router, Route, IndexRoute, IndexRedirect, hashHistory } from 'react-rou
 import { syncHistoryWithStore } from 'react-router-redux'
 require('./lib/ipcClient')
 require('../lib/customMeta')
+import i18n from 'browser/lib/i18n'
 
 const electron = require('electron')
 
@@ -36,7 +37,7 @@ document.addEventListener('click', function (e) {
   if (infoPanel) infoPanel.style.display = 'none'
 })
 
-let el = document.getElementById('content')
+const el = document.getElementById('content')
 const history = syncHistoryWithStore(hashHistory, store)
 
 function notify (...args) {
@@ -44,11 +45,11 @@ function notify (...args) {
 }
 
 function updateApp () {
-  let index = dialog.showMessageBox(remote.getCurrentWindow(), {
+  const index = dialog.showMessageBox(remote.getCurrentWindow(), {
     type: 'warning',
-    message: 'Update Boostnote',
-    detail: 'New Boostnote is ready to be installed.',
-    buttons: ['Restart & Install', 'Not Now']
+    message: i18n.__('Update Boostnote'),
+    detail: i18n.__('New Boostnote is ready to be installed.'),
+    buttons: [i18n.__('Restart & Install'), i18n.__('Not Now')]
   })
 
   if (index === 0) {
@@ -81,7 +82,7 @@ ReactDOM.render((
     </Router>
   </Provider>
 ), el, function () {
-  let loadingCover = document.getElementById('loadingCover')
+  const loadingCover = document.getElementById('loadingCover')
   loadingCover.parentNode.removeChild(loadingCover)
 
   ipcRenderer.on('update-ready', function () {

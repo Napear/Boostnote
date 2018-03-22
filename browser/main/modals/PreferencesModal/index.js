@@ -1,21 +1,28 @@
-import React, { PropTypes } from 'react'
-import ReactDOM from 'react-dom'
+import PropTypes from 'prop-types'
+import React from 'react'
 import { connect } from 'react-redux'
 import HotkeyTab from './HotkeyTab'
 import UiTab from './UiTab'
 import InfoTab from './InfoTab'
 import Crowdfunding from './Crowdfunding'
 import StoragesTab from './StoragesTab'
+import Blog from './Blog'
 import ModalEscButton from 'browser/components/ModalEscButton'
 import CSSModules from 'browser/lib/CSSModules'
 import styles from './PreferencesModal.styl'
+import RealtimeNotification from 'browser/components/RealtimeNotification'
+import _ from 'lodash'
+import i18n from 'browser/lib/i18n'
 
 class Preferences extends React.Component {
   constructor (props) {
     super(props)
 
     this.state = {
-      currentTab: 'STORAGES'
+      currentTab: 'STORAGES',
+      UIAlert: '',
+      HotkeyAlert: '',
+      BlogAlert: ''
     }
   }
 
@@ -41,7 +48,7 @@ class Preferences extends React.Component {
 
   renderContent () {
     const { boundingBox } = this.state
-    let { dispatch, config, data } = this.props
+    const { dispatch, config, data } = this.props
 
     switch (this.state.currentTab) {
       case 'INFO':
@@ -56,6 +63,7 @@ class Preferences extends React.Component {
           <HotkeyTab
             dispatch={dispatch}
             config={config}
+            haveToSave={alert => this.setState({HotkeyAlert: alert})}
           />
         )
       case 'UI':
@@ -63,11 +71,20 @@ class Preferences extends React.Component {
           <UiTab
             dispatch={dispatch}
             config={config}
+            haveToSave={alert => this.setState({UIAlert: alert})}
           />
         )
       case 'CROWDFUNDING':
         return (
           <Crowdfunding />
+        )
+      case 'BLOG':
+        return (
+          <Blog
+            dispatch={dispatch}
+            config={config}
+            haveToSave={alert => this.setState({BlogAlert: alert})}
+          />
         )
       case 'STORAGES':
       default:
@@ -88,23 +105,30 @@ class Preferences extends React.Component {
   }
 
   getContentBoundingBox () {
-    const node = ReactDOM.findDOMNode(this.refs.content)
-    return node.getBoundingClientRect()
+    return this.refs.content.getBoundingClientRect()
+  }
+
+  haveToSaveNotif (type, message) {
+    return (
+      <p styleName={`saving--${type}`}>{message}</p>
+    )
   }
 
   render () {
-    let content = this.renderContent()
+    const content = this.renderContent()
 
-    let tabs = [
-      {target: 'STORAGES', label: 'Storages'},
-      {target: 'HOTKEY', label: 'Hotkey'},
-      {target: 'UI', label: 'UI'},
-      {target: 'INFO', label: 'Info'},
-      {target: 'CROWDFUNDING', label: 'Crowdfunding'}
+    const tabs = [
+      {target: 'STORAGES', label: i18n.__('Storage')},
+      {target: 'HOTKEY', label: i18n.__('Hotkeys'), Hotkey: this.state.HotkeyAlert},
+      {target: 'UI', label: i18n.__('Interface'), UI: this.state.UIAlert},
+      {target: 'INFO', label: i18n.__('About')},
+      {target: 'CROWDFUNDING', label: i18n.__('Crowdfunding')},
+      {target: 'BLOG', label: i18n.__('Blog'), Blog: this.state.BlogAlert}
     ]
 
-    let navButtons = tabs.map((tab) => {
-      let isActive = this.state.currentTab === tab.target
+    const navButtons = tabs.map((tab) => {
+      const isActive = this.state.currentTab === tab.target
+      const isUiHotkeyTab = _.isObject(tab[tab.label]) && tab.label === tab[tab.label].tab
       return (
         <button styleName={isActive
             ? 'nav-button--active'
@@ -116,6 +140,7 @@ class Preferences extends React.Component {
           <span styleName='nav-button-label'>
             {tab.label}
           </span>
+          {isUiHotkeyTab ? this.haveToSaveNotif(tab[tab.label].type, tab[tab.label].message) : null}
         </button>
       )
     })
@@ -127,7 +152,7 @@ class Preferences extends React.Component {
         onKeyDown={(e) => this.handleKeyDown(e)}
       >
         <div styleName='top-bar'>
-          <p>Your preferences for Boostnote</p>
+          <p>{i18n.__('Your preferences for Boostnote')}</p>
         </div>
         <ModalEscButton handleEscButtonClick={(e) => this.handleEscButtonClick(e)} />
         <div styleName='nav'>
@@ -136,6 +161,7 @@ class Preferences extends React.Component {
         <div ref='content' styleName='content'>
           {content}
         </div>
+        <RealtimeNotification />
       </div>
     )
   }

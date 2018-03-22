@@ -1,7 +1,9 @@
-import React, { PropTypes } from 'react'
+import PropTypes from 'prop-types'
+import React from 'react'
 import CSSModules from 'browser/lib/CSSModules'
 import styles from './StatusBar.styl'
 import ZoomManager from 'browser/main/lib/ZoomManager'
+import i18n from 'browser/lib/i18n'
 
 const electron = require('electron')
 const { remote, ipcRenderer } = electron
@@ -11,11 +13,11 @@ const zoomOptions = [0.8, 0.9, 1, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2
 
 class StatusBar extends React.Component {
   updateApp () {
-    let index = dialog.showMessageBox(remote.getCurrentWindow(), {
+    const index = dialog.showMessageBox(remote.getCurrentWindow(), {
       type: 'warning',
-      message: 'Update Boostnote',
-      detail: 'New Boostnote is ready to be installed.',
-      buttons: ['Restart & Install', 'Not Now']
+      message: i18n.__('Update Boostnote'),
+      detail: i18n.__('New Boostnote is ready to be installed.'),
+      buttons: [i18n.__('Restart & Install'), i18n.__('Not Now')]
     })
 
     if (index === 0) {
@@ -24,7 +26,7 @@ class StatusBar extends React.Component {
   }
 
   handleZoomButtonClick (e) {
-    let menu = new Menu()
+    const menu = new Menu()
 
     zoomOptions.forEach((zoom) => {
       menu.append(new MenuItem({
@@ -37,7 +39,7 @@ class StatusBar extends React.Component {
   }
 
   handleZoomMenuItemClick (zoomFactor) {
-    let { dispatch } = this.props
+    const { dispatch } = this.props
     ZoomManager.setZoom(zoomFactor)
     dispatch({
       type: 'SET_ZOOM',
@@ -46,7 +48,7 @@ class StatusBar extends React.Component {
   }
 
   render () {
-    let { config, status } = this.context
+    const { config, status } = this.context
 
     return (
       <div className='StatusBar'
@@ -55,14 +57,14 @@ class StatusBar extends React.Component {
         <button styleName='zoom'
           onClick={(e) => this.handleZoomButtonClick(e)}
         >
-          <i className='fa fa-search-plus' />&nbsp;
-          {Math.floor(config.zoom * 100)}%
+          <img src='../resources/icon/icon-zoom.svg' />
+          <span>{Math.floor(config.zoom * 100)}%</span>
         </button>
 
         {status.updateReady
           ? <button onClick={this.updateApp} styleName='update'>
-            <i styleName='update-icon' className='fa fa-cloud-download' /> Ready to Update!
-            </button>
+            <i styleName='update-icon' className='fa fa-cloud-download' /> {i18n.__('Ready to Update!')}
+          </button>
           : null
         }
       </div>

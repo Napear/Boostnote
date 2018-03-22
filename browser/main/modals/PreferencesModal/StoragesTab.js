@@ -1,19 +1,21 @@
-import React, { PropTypes } from 'react'
+import PropTypes from 'prop-types'
+import React from 'react'
 import CSSModules from 'browser/lib/CSSModules'
 import styles from './StoragesTab.styl'
 import dataApi from 'browser/main/lib/dataApi'
 import StorageItem from './StorageItem'
+import i18n from 'browser/lib/i18n'
 
 const electron = require('electron')
 const { shell, remote } = electron
 
 function browseFolder () {
-  let dialog = remote.dialog
+  const dialog = remote.dialog
 
-  let defaultPath = remote.app.getPath('home')
+  const defaultPath = remote.app.getPath('home')
   return new Promise((resolve, reject) => {
     dialog.showOpenDialog({
-      title: 'Select Directory',
+      title: i18n.__('Select Directory'),
       defaultPath,
       properties: ['openDirectory', 'createDirectory']
     }, function (targetPaths) {
@@ -56,10 +58,10 @@ class StoragesTab extends React.Component {
   }
 
   renderList () {
-    let { data, boundingBox } = this.props
+    const { data, boundingBox } = this.props
 
     if (!boundingBox) { return null }
-    let storageList = data.storageMap.map((storage) => {
+    const storageList = data.storageMap.map((storage) => {
       return <StorageItem
         key={storage.key}
         storage={storage}
@@ -68,16 +70,16 @@ class StoragesTab extends React.Component {
     })
     return (
       <div styleName='list'>
-        <div styleName='header'>Storages</div>
+        <div styleName='header'>{i18n.__('Storages')}</div>
         {storageList.length > 0
           ? storageList
-          : <div styleName='list-empty'>No storage found.</div>
+          : <div styleName='list-empty'>{i18n.__('No storage found.')}</div>
         }
         <div styleName='list-control'>
           <button styleName='list-control-addStorageButton'
             onClick={(e) => this.handleAddStorageButton(e)}
           >
-            <i className='fa fa-plus' /> Add Storage
+            <i className='fa fa-plus' /> {i18n.__('Add Storage Location')}
           </button>
         </div>
       </div>
@@ -88,7 +90,7 @@ class StoragesTab extends React.Component {
     browseFolder()
       .then((targetPath) => {
         if (targetPath.length > 0) {
-          let { newStorage } = this.state
+          const { newStorage } = this.state
           newStorage.path = targetPath
           this.setState({
             newStorage
@@ -102,7 +104,7 @@ class StoragesTab extends React.Component {
   }
 
   handleAddStorageChange (e) {
-    let { newStorage } = this.state
+    const { newStorage } = this.state
     newStorage.name = this.refs.addStorageName.value
     newStorage.path = this.refs.addStoragePath.value
     this.setState({
@@ -117,7 +119,7 @@ class StoragesTab extends React.Component {
         path: this.state.newStorage.path
       })
       .then((data) => {
-        let { dispatch } = this.props
+        const { dispatch } = this.props
         dispatch({
           type: 'ADD_STORAGE',
           storage: data.storage,
@@ -139,13 +141,13 @@ class StoragesTab extends React.Component {
     return (
       <div styleName='addStorage'>
 
-        <div styleName='addStorage-header'>Add Storage</div>
+        <div styleName='addStorage-header'>{i18n.__('Add Storage')}</div>
 
         <div styleName='addStorage-body'>
 
           <div styleName='addStorage-body-section'>
             <div styleName='addStorage-body-section-label'>
-              Name
+              {i18n.__('Name')}
             </div>
             <div styleName='addStorage-body-section-name'>
               <input styleName='addStorage-body-section-name-input'
@@ -157,25 +159,25 @@ class StoragesTab extends React.Component {
           </div>
 
           <div styleName='addStorage-body-section'>
-            <div styleName='addStorage-body-section-label'>Type</div>
+            <div styleName='addStorage-body-section-label'>{i18n.__('Type')}</div>
             <div styleName='addStorage-body-section-type'>
               <select styleName='addStorage-body-section-type-select'
                 value={this.state.newStorage.type}
                 readOnly
               >
-                <option value='FILESYSTEM'>File System</option>
+                <option value='FILESYSTEM'>{i18n.__('File System')}</option>
               </select>
               <div styleName='addStorage-body-section-type-description'>
-                3rd party cloud integration:
-                <a href='https://github.com/BoostIO/Boostnote/wiki/Cloud-Syncing'
+                {i18n.__('Setting up 3rd-party cloud storage integration:')}{' '}
+                <a href='https://github.com/BoostIO/Boostnote/wiki/Cloud-Syncing-and-Backup'
                   onClick={(e) => this.handleLinkClick(e)}
-                >Cloud-Syncing</a>
+                >{i18n.__('Cloud-Syncing-and-Backup')}</a>
               </div>
             </div>
           </div>
 
           <div styleName='addStorage-body-section'>
-            <div styleName='addStorage-body-section-label'>Location
+            <div styleName='addStorage-body-section-label'>{i18n.__('Location')}
             </div>
             <div styleName='addStorage-body-section-path'>
               <input styleName='addStorage-body-section-path-input'
@@ -195,10 +197,10 @@ class StoragesTab extends React.Component {
           <div styleName='addStorage-body-control'>
             <button styleName='addStorage-body-control-createButton'
               onClick={(e) => this.handleAddStorageCreateButton(e)}
-            >Create</button>
+            >{i18n.__('Add')}</button>
             <button styleName='addStorage-body-control-cancelButton'
               onClick={(e) => this.handleAddStorageCancelButton(e)}
-            >Cancel</button>
+            >{i18n.__('Cancel')}</button>
           </div>
 
         </div>

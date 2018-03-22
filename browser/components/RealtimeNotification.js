@@ -1,4 +1,4 @@
-import React, { PropTypes } from 'react'
+import React from 'react'
 import CSSModules from 'browser/lib/CSSModules'
 import styles from './RealtimeNotification.styl'
 
@@ -40,7 +40,7 @@ class RealtimeNotification extends React.Component {
       ? <a styleName='notification-link' href={notifications[0].linkUrl}
         onClick={(e) => this.handleLinkClick(e)}
       >
-        {notifications[0].text}
+        Info: {notifications[0].text}
       </a>
     : ''
 

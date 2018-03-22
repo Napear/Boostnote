@@ -53,6 +53,14 @@
     font-weight: 100;
     color: #888;
   }
+  .CodeEditor {
+    opacity: 1 !important;
+    pointer-events: auto !important;
+  }
+  .CodeMirror-ruler {
+    border-left-color: rgba(142, 142, 142, 0.5);
+    mix-blend-mode: difference;
+  }
   </style>
 </head>
 <body>
@@ -65,21 +73,27 @@
 
   <script src="../node_modules/codemirror/lib/codemirror.js"></script>
   <script src="../node_modules/codemirror/mode/meta.js"></script>
+  <script src="../node_modules/codemirror-mode-elixir/dist/elixir.js"></script>
   <script src="../node_modules/codemirror/addon/mode/overlay.js"></script>
   <script src="../node_modules/codemirror/addon/mode/loadmode.js"></script>
+  <script src="../node_modules/codemirror/addon/mode/simple.js"></script>
   <script src="../node_modules/codemirror/keymap/sublime.js"></script>
   <script src="../node_modules/codemirror/keymap/vim.js"></script>
   <script src="../node_modules/codemirror/keymap/emacs.js"></script>
   <script src="../node_modules/codemirror/addon/runmode/runmode.js"></script>
 
-  <script src="../node_modules/codemirror/addon/edit/continuelist.js"></script>
+  <script src="../extra_scripts/boost/boostNewLineIndentContinueMarkdownList.js"></script>
+
+  <script src="../node_modules/codemirror/addon/edit/closebrackets.js"></script>
 
   <script src="../node_modules/codemirror/addon/search/search.js"></script>
   <script src="../node_modules/codemirror/addon/search/searchcursor.js"></script>
   <script src="../node_modules/codemirror/addon/scroll/annotatescrollbar.js"></script>
+  <script src="../node_modules/codemirror/addon/scroll/scrollpastend.js"></script>
   <script src="../node_modules/codemirror/addon/search/matchesonscrollbar.js"></script>
   <script src="../node_modules/codemirror/addon/search/jump-to-line.js"></script>
   <script src="../node_modules/codemirror/addon/dialog/dialog.js"></script>
+  <script src="../node_modules/codemirror/addon/display/rulers.js"></script>
 
   <script src="../node_modules/raphael/raphael.min.js"></script>
   <script src="../node_modules/flowchart.js/release/flowchart.min.js"></script>
@@ -88,7 +102,6 @@
   </script>
 
   <script src="../node_modules/js-sequence-diagrams/fucknpm/sequence-diagram-min.js"></script>
-  <script src="../node_modules/katex/dist/katex.min.js"></script>
   <script src="../node_modules/react/dist/react.min.js"></script>
   <script src="../node_modules/react-dom/dist/react-dom.min.js"></script>
   <script src="../node_modules/redux/dist/redux.min.js"></script>

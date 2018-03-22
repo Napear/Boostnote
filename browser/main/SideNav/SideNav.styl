@@ -1,7 +1,7 @@
 .root
   absolute top left bottom
   width $sideNav-width
-  background-color #f9f9f9
+  background-color #2E3235
   user-select none
   color $ui-text-color
   height: 100vh
@@ -11,43 +11,15 @@
 .top
   padding-bottom 15px
 
-.top-menu
-  navButtonColor()
-  position absolute
-  top 22px
-  right 5px
-  height 23px
-  width 2em
-  &:hover
-    color $ui-text-color
-  &:active, &:active:hover
-    color $ui-text-color
-    background-color alpha($ui-button--active-backgroundColor, 20%)
-
 .switch-buttons
   background-color transparent
-  border 1px solid $ui-borderColor
-  width 110px
-  height 25px
-  margin 20px auto 0px auto
-  border-radius 1px
+  border 0
+  margin 24px auto 4px 14px
+  display flex
+  text-align center
 
-.non-active-button
-  navButtonColor()
-  font-weight 600
-  width 54px
-  height 23px
 
-.active-button
-  @extend .non-active-button
-  background-color $ui-button--active-backgroundColor
-  color $ui-text-color
-  &:hover
-    background-color alpha($ui-button--active-backgroundColor, 70%)
-    color alpha($ui-text-color, 70%)
-  &:active, &:active:hover
-    background-color $ui-button--active-backgroundColor
-
+  
 .top-menu-label
   margin-left 5px
   overflow ellipsis
@@ -62,7 +34,7 @@
   padding-left 15px
   padding-bottom 13px
   p
-    color $ui-text-color
+    color $ui-button-default-color
 
 .tagList
   overflow-y auto
@@ -71,6 +43,7 @@
 .root--folded
   height 100vh
   width $sideNav--folded-width
+  background-color #2E3235
   .switch-buttons
     display none
   .top
@@ -93,51 +66,32 @@
     opacity 0
     margin-left 0
     overflow hidden
-    background-color $ui-tooltip-backgroundColor
     z-index 10
     color white
     line-height 30px
     border-top-right-radius 2px
     border-bottom-right-radius 2px
     pointer-events none
-    font-size 12px
+    font-size 13px
+  .top-menu-preference
+    position absolute
+    left 7px
+
+body[data-theme="white"]
+  .root, .root--folded
+    background-color #f9f9f9
+    color $ui-text-color
 
 body[data-theme="dark"]
   .root, .root--folded
-    border-color $ui-dark-borderColor
+    border-right 1px solid $ui-dark-borderColor
     background-color $ui-dark-backgroundColor
     color $ui-dark-text-color
 
   .top
     border-color $ui-dark-borderColor
 
-  .top-menu
-    navDarkButtonColor()
-    &:active
-      background-color alpha($ui-dark-button--active-backgroundColor, 20%)
-    &:hover
-      background-color alpha($ui-dark-button--active-backgroundColor, 20%)
-
-  .switch-buttons
-    border-color $ui-dark-borderColor
-
-  .non-active-button
-    navDarkButtonColor()
-
-  .active-button
-    @extend .non-active-button
-    background-color $ui-dark-button--active-backgroundColor
-    color $ui-dark-text-color
-    &:hover
-      background-color alpha($ui-dark-button--active-backgroundColor, 70%)
-      color alpha($ui-dark-text-color, 70%)
-    &:active
-      color $ui-dark-text-color
-      background-color alpha($ui-dark-button--active-backgroundColor, 60%)
-    &:active, &:active:hover
-      color $ui-dark-text-color
-      background-color $ui-dark-button--active-backgroundColor
-
-  .tag-title
-    p
-      color alpha($ui-dark-text-color, 60%)
+body[data-theme="solarized-dark"]
+  .root, .root--folded
+    background-color $ui-solarized-dark-backgroundColor
+    border-right 1px solid $ui-solarized-dark-borderColor

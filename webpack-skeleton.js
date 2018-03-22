@@ -4,8 +4,7 @@ const NodeTargetPlugin = require('webpack/lib/node/NodeTargetPlugin')
 
 var config = {
   entry: {
-    main: './browser/main/index.js',
-    finder: './browser/finder/index.js'
+    main: './browser/main/index.js'
   },
   resolve: {
     extensions: ['', '.js', '.jsx', '.styl'],
@@ -39,8 +38,9 @@ var config = {
     'fs-jetpack',
     '@rokt33r/markdown-it-math',
     'markdown-it-checkbox',
+    'markdown-it-kbd',
+    'markdown-it-plantuml',
     'devtron',
-    'mixpanel',
     '@rokt33r/season',
     {
       react: 'var React',

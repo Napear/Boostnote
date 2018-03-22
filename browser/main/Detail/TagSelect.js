@@ -1,8 +1,10 @@
-import React, { PropTypes } from 'react'
+import PropTypes from 'prop-types'
+import React from 'react'
 import CSSModules from 'browser/lib/CSSModules'
 import styles from './TagSelect.styl'
 import _ from 'lodash'
 import AwsMobileAnalyticsConfig from 'browser/main/lib/AwsMobileAnalyticsConfig'
+import i18n from 'browser/lib/i18n'
 
 class TagSelect extends React.Component {
   constructor (props) {
@@ -37,6 +39,10 @@ class TagSelect extends React.Component {
     }
   }
 
+  handleNewTagBlur (e) {
+    this.submitTag()
+  }
+
   removeLastTag () {
     let { value } = this.props
 
@@ -60,6 +66,7 @@ class TagSelect extends React.Component {
     AwsMobileAnalyticsConfig.recordDynamicCustomEvent('ADD_TAG')
     let { value } = this.props
     let newTag = this.refs.newTag.value.trim().replace(/ +/g, '_')
+    newTag = newTag.charAt(0) === '#' ? newTag.substring(1) : newTag
 
     if (newTag.length <= 0) {
       this.setState({
@@ -101,9 +108,9 @@ class TagSelect extends React.Component {
   }
 
   render () {
-    let { value, className } = this.props
+    const { value, className } = this.props
 
-    let tagList = _.isArray(value)
+    const tagList = _.isArray(value)
       ? value.map((tag) => {
         return (
           <span styleName='tag'
@@ -113,7 +120,7 @@ class TagSelect extends React.Component {
             <button styleName='tag-removeButton'
               onClick={(e) => this.handleTagRemoveButtonClick(tag)(e)}
             >
-              <i className='fa fa-times fa-fw tag-removeButton-icon' />
+              <img className='tag-removeButton-icon' src='../resources/icon/icon-x.svg' width='8px' />
             </button>
           </span>
         )
@@ -131,9 +138,10 @@ class TagSelect extends React.Component {
         <input styleName='newTag'
           ref='newTag'
           value={this.state.newTag}
-          placeholder='Add tag...'
+          placeholder={i18n.__('Add tag...')}
           onChange={(e) => this.handleNewTagInputChange(e)}
           onKeyDown={(e) => this.handleNewTagInputKeyDown(e)}
+          onBlur={(e) => this.handleNewTagBlur(e)}
         />
       </div>
     )

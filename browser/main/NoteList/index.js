@@ -1,4 +1,6 @@
-import React, { PropTypes } from 'react'
+/* global electron */
+import PropTypes from 'prop-types'
+import React from 'react'
 import CSSModules from 'browser/lib/CSSModules'
 import styles from './NoteList.styl'
 import moment from 'moment'
@@ -10,14 +12,16 @@ import NoteItem from 'browser/components/NoteItem'
 import NoteItemSimple from 'browser/components/NoteItemSimple'
 import searchFromNotes from 'browser/lib/search'
 import fs from 'fs'
+import path from 'path'
 import { hashHistory } from 'react-router'
-import markdown from 'browser/lib/markdown'
-import { findNoteTitle } from 'browser/lib/findNoteTitle'
-import stripgtags from 'striptags'
-import store from 'browser/main/store'
+import copy from 'copy-to-clipboard'
+import AwsMobileAnalyticsConfig from 'browser/main/lib/AwsMobileAnalyticsConfig'
+import Markdown from '../../lib/markdown'
+import i18n from 'browser/lib/i18n'
 
 const { remote } = require('electron')
 const { Menu, MenuItem, dialog } = remote
+const WP_POST_PATH = '/wp/v2/posts'
 
 function sortByCreatedAt (a, b) {
   return new Date(b.createdAt) - new Date(a.createdAt)
@@ -29,6 +33,18 @@ function sortByAlphabetical (a, b) {
 
 function sortByUpdatedAt (a, b) {
   return new Date(b.updatedAt) - new Date(a.updatedAt)
+}
+
+function findNoteByKey (notes, noteKey) {
+  return notes.find((note) => note.key === noteKey)
+}
+
+function findNotesByKeys (notes, noteKeys) {
+  return notes.filter((note) => noteKeys.includes(getNoteKey(note)))
+}
+
+function getNoteKey (note) {
+  return note.key
 }
 
 class NoteList extends React.Component {
@@ -50,8 +66,21 @@ class NoteList extends React.Component {
     }
     this.importFromFileHandler = this.importFromFile.bind(this)
     this.jumpNoteByHash = this.jumpNoteByHashHandler.bind(this)
+    this.handleNoteListKeyUp = this.handleNoteListKeyUp.bind(this)
+    this.getNoteKeyFromTargetIndex = this.getNoteKeyFromTargetIndex.bind(this)
+    this.deleteNote = this.deleteNote.bind(this)
+    this.focusNote = this.focusNote.bind(this)
+    this.pinToTop = this.pinToTop.bind(this)
+    this.getNoteStorage = this.getNoteStorage.bind(this)
+    this.getNoteFolder = this.getNoteFolder.bind(this)
+    this.getViewType = this.getViewType.bind(this)
+    this.restoreNote = this.restoreNote.bind(this)
+    this.copyNoteLink = this.copyNoteLink.bind(this)
 
+    // TODO: not Selected noteKeys but SelectedNote(for reusing)
     this.state = {
+      shiftKeyDown: false,
+      selectedNoteKeys: []
     }
 
     this.contextNotes = []
@@ -89,15 +118,28 @@ class NoteList extends React.Component {
   }
 
   componentDidUpdate (prevProps) {
-    let { location } = this.props
+    const { location } = this.props
+    const { selectedNoteKeys } = this.state
+    const visibleNoteKeys = this.notes.map(note => note.key)
+    const note = this.notes[0]
+    const prevKey = prevProps.location.query.key
+    const noteKey = visibleNoteKeys.includes(prevKey) ? prevKey : note && note.key
 
-    if (this.notes.length > 0 && location.query.key == null) {
-      let { router } = this.context
+    if (note && location.query.key == null) {
+      const { router } = this.context
       if (!location.pathname.match(/\/searched/)) this.contextNotes = this.getContextNotes()
+
+      // A visible note is an active note
+      if (!selectedNoteKeys.includes(noteKey)) {
+        if (selectedNoteKeys.length === 1) selectedNoteKeys.pop()
+        selectedNoteKeys.push(noteKey)
+        ee.emit('list:moved')
+      }
+
       router.replace({
         pathname: location.pathname,
         query: {
-          key: this.notes[0].storage + '-' + this.notes[0].key
+          key: noteKey
         }
       })
       return
@@ -107,16 +149,16 @@ class NoteList extends React.Component {
     if (_.isString(location.query.key) && prevProps.location.query.key === location.query.key) {
       const targetIndex = this.getTargetIndex()
       if (targetIndex > -1) {
-        let list = this.refs.list
-        let item = list.childNodes[targetIndex]
+        const list = this.refs.list
+        const item = list.childNodes[targetIndex]
 
         if (item == null) return false
 
-        let overflowBelow = item.offsetTop + item.clientHeight - list.clientHeight - list.scrollTop > 0
+        const overflowBelow = item.offsetTop + item.clientHeight - list.clientHeight - list.scrollTop > 0
         if (overflowBelow) {
           list.scrollTop = item.offsetTop + item.clientHeight - list.clientHeight
         }
-        let overflowAbove = list.scrollTop > item.offsetTop
+        const overflowAbove = list.scrollTop > item.offsetTop
         if (overflowAbove) {
           list.scrollTop = item.offsetTop
         }
@@ -124,12 +166,34 @@ class NoteList extends React.Component {
     }
   }
 
+  focusNote (selectedNoteKeys, noteKey) {
+    const { router } = this.context
+    const { location } = this.props
+
+    this.setState({
+      selectedNoteKeys
+    })
+
+    router.push({
+      pathname: location.pathname,
+      query: {
+        key: noteKey
+      }
+    })
+  }
+
+  getNoteKeyFromTargetIndex (targetIndex) {
+    const note = Object.assign({}, this.notes[targetIndex])
+    const noteKey = getNoteKey(note)
+    return noteKey
+  }
+
   selectPriorNote () {
     if (this.notes == null || this.notes.length === 0) {
       return
     }
-    let { router } = this.context
-    let { location } = this.props
+    let { selectedNoteKeys } = this.state
+    const { shiftKeyDown } = this.state
 
     let targetIndex = this.getTargetIndex()
 
@@ -137,39 +201,50 @@ class NoteList extends React.Component {
       return
     }
     targetIndex--
-    if (targetIndex < 0) targetIndex = 0
 
-    router.push({
-      pathname: location.pathname,
-      query: {
-        key: this.notes[targetIndex].storage + '-' + this.notes[targetIndex].key
-      }
-    })
+    if (!shiftKeyDown) { selectedNoteKeys = [] }
+    const priorNoteKey = this.getNoteKeyFromTargetIndex(targetIndex)
+    if (selectedNoteKeys.includes(priorNoteKey)) {
+      selectedNoteKeys.pop()
+    } else {
+      selectedNoteKeys.push(priorNoteKey)
+    }
+
+    this.focusNote(selectedNoteKeys, priorNoteKey)
+
+    ee.emit('list:moved')
   }
 
   selectNextNote () {
     if (this.notes == null || this.notes.length === 0) {
       return
     }
-    let { router } = this.context
-    let { location } = this.props
+    let { selectedNoteKeys } = this.state
+    const { shiftKeyDown } = this.state
 
     let targetIndex = this.getTargetIndex()
+    const isTargetLastNote = targetIndex === this.notes.length - 1
 
-    if (targetIndex === this.notes.length - 1) {
+    if (isTargetLastNote && shiftKeyDown) {
+      return
+    } else if (isTargetLastNote) {
       targetIndex = 0
     } else {
       targetIndex++
       if (targetIndex < 0) targetIndex = 0
-      else if (targetIndex > this.notes.length - 1) targetIndex === this.notes.length - 1
+      else if (targetIndex > this.notes.length - 1) targetIndex = this.notes.length - 1
     }
 
-    router.push({
-      pathname: location.pathname,
-      query: {
-        key: this.notes[targetIndex].storage + '-' + this.notes[targetIndex].key
-      }
-    })
+    if (!shiftKeyDown) { selectedNoteKeys = [] }
+    const nextNoteKey = this.getNoteKeyFromTargetIndex(targetIndex)
+    if (selectedNoteKeys.includes(nextNoteKey)) {
+      selectedNoteKeys.pop()
+    } else {
+      selectedNoteKeys.push(nextNoteKey)
+    }
+
+    this.focusNote(selectedNoteKeys, nextNoteKey)
+
     ee.emit('list:moved')
   }
 
@@ -179,19 +254,8 @@ class NoteList extends React.Component {
       return
     }
 
-    const { router } = this.context
-    const { location } = this.props
-
-    let targetIndex = this.getTargetIndex()
-
-    if (targetIndex < 0) targetIndex = 0
-
-    router.push({
-      pathname: location.pathname,
-      query: {
-        key: this.notes[targetIndex].storage + '-' + this.notes[targetIndex].key
-      }
-    })
+    const selectedNoteKeys = [noteHash]
+    this.focusNote(selectedNoteKeys, noteHash)
 
     ee.emit('list:moved')
   }
@@ -199,37 +263,57 @@ class NoteList extends React.Component {
   handleNoteListKeyDown (e) {
     if (e.metaKey || e.ctrlKey) return true
 
+    // A key
     if (e.keyCode === 65 && !e.shiftKey) {
       e.preventDefault()
       ee.emit('top:new-note')
     }
 
+    // D key
     if (e.keyCode === 68) {
       e.preventDefault()
-      ee.emit('detail:delete')
+      this.deleteNote()
     }
 
+    // E key
     if (e.keyCode === 69) {
       e.preventDefault()
       ee.emit('detail:focus')
     }
 
-    if (e.keyCode === 38) {
+    // F or S key
+    if (e.keyCode === 70 || e.keyCode === 83) {
+      e.preventDefault()
+      ee.emit('top:focus-search')
+    }
+
+    // UP or K key
+    if (e.keyCode === 38 || e.keyCode === 75) {
       e.preventDefault()
       this.selectPriorNote()
     }
 
-    if (e.keyCode === 40) {
+    // DOWN or J key
+    if (e.keyCode === 40 || e.keyCode === 74) {
       e.preventDefault()
       this.selectNextNote()
+    }
+
+    if (e.shiftKey) {
+      this.setState({ shiftKeyDown: true })
+    }
+  }
+
+  handleNoteListKeyUp (e) {
+    if (!e.shiftKey) {
+      this.setState({ shiftKeyDown: false })
     }
   }
 
   getNotes () {
-    let { data, params, location } = this.props
-    let { router } = this.context
+    const { data, params, location } = this.props
 
-    if (location.pathname.match(/\/home/) || location.pathname.match(/\alltags/)) {
+    if (location.pathname.match(/\/home/) || location.pathname.match(/alltags/)) {
       const allNotes = data.noteMap.map((note) => note)
       this.contextNotes = allNotes
       return allNotes
@@ -285,16 +369,40 @@ class NoteList extends React.Component {
   }
 
   sortByPin (unorderedNotes) {
-    const pinnedNotes = unorderedNotes.filter((note) => {
-      return note.isPinned
+    const pinnedNotes = []
+    const unpinnedNotes = []
+
+    unorderedNotes.forEach((note) => {
+      if (note.isPinned) {
+        pinnedNotes.push(note)
+      } else {
+        unpinnedNotes.push(note)
+      }
     })
 
-    return pinnedNotes.concat(unorderedNotes)
+    return pinnedNotes.concat(unpinnedNotes)
   }
 
   handleNoteClick (e, uniqueKey) {
-    let { router } = this.context
-    let { location } = this.props
+    const { router } = this.context
+    const { location } = this.props
+    let { selectedNoteKeys } = this.state
+    const { shiftKeyDown } = this.state
+
+    if (shiftKeyDown && selectedNoteKeys.includes(uniqueKey)) {
+      const newSelectedNoteKeys = selectedNoteKeys.filter((noteKey) => noteKey !== uniqueKey)
+      this.setState({
+        selectedNoteKeys: newSelectedNoteKeys
+      })
+      return
+    }
+    if (!shiftKeyDown) {
+      selectedNoteKeys = []
+    }
+    selectedNoteKeys.push(uniqueKey)
+    this.setState({
+      selectedNoteKeys
+    })
 
     router.push({
       pathname: location.pathname,
@@ -305,9 +413,9 @@ class NoteList extends React.Component {
   }
 
   handleSortByChange (e) {
-    let { dispatch } = this.props
+    const { dispatch } = this.props
 
-    let config = {
+    const config = {
       sortBy: e.target.value
     }
 
@@ -319,9 +427,9 @@ class NoteList extends React.Component {
   }
 
   handleListStyleButtonClick (e, style) {
-    let { dispatch } = this.props
+    const { dispatch } = this.props
 
-    let config = {
+    const config = {
       listStyle: style
     }
 
@@ -337,68 +445,344 @@ class NoteList extends React.Component {
     if (this.notes[targetIndex].type === 'SNIPPET_NOTE') {
       dialog.showMessageBox(remote.getCurrentWindow(), {
         type: 'warning',
-        message: 'Sorry!',
-        detail: 'md/text import is available only a markdown note.',
-        buttons: ['OK', 'Cancel']
+        message: i18n.__('Sorry!'),
+        detail: i18n.__('md/text import is available only a markdown note.'),
+        buttons: [i18n.__('OK'), i18n.__('Cancel')]
       })
     }
   }
 
   handleDragStart (e, note) {
-    const noteData = JSON.stringify(note)
+    const { selectedNoteKeys } = this.state
+    const notes = this.notes.map((note) => Object.assign({}, note))
+    const selectedNotes = findNotesByKeys(notes, selectedNoteKeys)
+    const noteData = JSON.stringify(selectedNotes)
     e.dataTransfer.setData('note', noteData)
+    this.setState({ selectedNoteKeys: [] })
   }
 
   handleNoteContextMenu (e, uniqueKey) {
     const { location } = this.props
-    const targetIndex = this.getTargetIndex()
-    let note = this.notes[targetIndex]
-    const label = note.isPinned ? 'Remove pin' : 'Pin to Top'
+    const { selectedNoteKeys } = this.state
+    const note = findNoteByKey(this.notes, uniqueKey)
+    const noteKey = getNoteKey(note)
 
-    let menu = new Menu()
-    if (!location.pathname.match(/\/home|\/starred|\/trash/)) {
+    if (selectedNoteKeys.length === 0 || !selectedNoteKeys.includes(noteKey)) {
+      this.handleNoteClick(e, uniqueKey)
+    }
+
+    const pinLabel = note.isPinned ? i18n.__('Remove pin') : i18n.__('Pin to Top')
+    const deleteLabel = i18n.__('Delete Note')
+    const cloneNote = i18n.__('Clone Note')
+    const restoreNote = i18n.__('Restore Note')
+    const copyNoteLink = i18n.__('Copy Note Link')
+    const publishLabel = i18n.__('Publish Blog')
+    const updateLabel = i18n.__('Update Blog')
+    const openBlogLabel = i18n.__('Open Blog')
+
+    const menu = new Menu()
+    if (!location.pathname.match(/\/starred|\/trash/)) {
       menu.append(new MenuItem({
-        label: label,
-        click: (e) => this.pinToTop(e, uniqueKey)
+        label: pinLabel,
+        click: this.pinToTop
       }))
     }
+
+    if (location.pathname.match(/\/trash/)) {
+      menu.append(new MenuItem({
+        label: restoreNote,
+        click: this.restoreNote
+      }))
+    }
+
     menu.append(new MenuItem({
-      label: 'Delete Note',
-      click: (e) => this.deleteNote(e, uniqueKey)
+      label: deleteLabel,
+      click: this.deleteNote
     }))
+    menu.append(new MenuItem({
+      label: cloneNote,
+      click: this.cloneNote.bind(this)
+    }))
+    menu.append(new MenuItem({
+      label: copyNoteLink,
+      click: this.copyNoteLink(note)
+    }))
+    if (note.type === 'MARKDOWN_NOTE') {
+      if (note.blog && note.blog.blogLink && note.blog.blogId) {
+        menu.append(new MenuItem({
+          label: updateLabel,
+          click: this.publishMarkdown.bind(this)
+        }))
+        menu.append(new MenuItem({
+          label: openBlogLabel,
+          click: () => this.openBlog.bind(this)(note)
+        }))
+      } else {
+        menu.append(new MenuItem({
+          label: publishLabel,
+          click: this.publishMarkdown.bind(this)
+        }))
+      }
+    }
+
     menu.popup()
   }
 
-  pinToTop (e, uniqueKey) {
-    const { data, params } = this.props
-    const storageKey = params.storageKey
-    const folderKey = params.folderKey
+  updateSelectedNotes (updateFunc, cleanSelection = true) {
+    const { selectedNoteKeys } = this.state
+    const { dispatch } = this.props
+    const notes = this.notes.map((note) => Object.assign({}, note))
+    const selectedNotes = findNotesByKeys(notes, selectedNoteKeys)
 
-    const currentStorage = data.storageMap.get(storageKey)
-    const currentFolder = _.find(currentStorage.folders, {key: folderKey})
+    if (!_.isFunction(updateFunc)) {
+      console.warn('Update function is not defined. No update will happen')
+      updateFunc = (note) => { return note }
+    }
 
-    const targetIndex = this.getTargetIndex()
-    let note = this.notes[targetIndex]
-    note.isPinned = !note.isPinned
+    Promise.all(
+        selectedNotes.map((note) => {
+          note = updateFunc(note)
+          return dataApi
+              .updateNote(note.storage, note.key, note)
+        })
+    )
+        .then((updatedNotes) => {
+          updatedNotes.forEach((note) => {
+            dispatch({
+              type: 'UPDATE_NOTE',
+              note
+            })
+          })
+        })
 
+    if (cleanSelection) {
+      this.selectNextNote()
+    }
+  }
+
+  pinToTop () {
+    this.updateSelectedNotes((note) => {
+      note.isPinned = !note.isPinned
+      return note
+    })
+  }
+
+  restoreNote () {
+    this.updateSelectedNotes((note) => {
+      note.isTrashed = false
+      return note
+    })
+  }
+
+  deleteNote () {
+    const { dispatch } = this.props
+    const { selectedNoteKeys } = this.state
+    const notes = this.notes.map((note) => Object.assign({}, note))
+    const selectedNotes = findNotesByKeys(notes, selectedNoteKeys)
+    const firstNote = selectedNotes[0]
+
+    if (firstNote.isTrashed) {
+      const noteExp = selectedNotes.length > 1 ? 'notes' : 'note'
+      const dialogueButtonIndex = dialog.showMessageBox(remote.getCurrentWindow(), {
+        type: 'warning',
+        message: i18n.__('Confirm note deletion'),
+        detail: `This will permanently remove ${selectedNotes.length} ${noteExp}.`,
+        buttons: [i18n.__('Confirm'), i18n.__('Cancel')]
+      })
+      if (dialogueButtonIndex === 1) return
+      Promise.all(
+        selectedNotes.map((note) => {
+          return dataApi
+            .deleteNote(note.storage, note.key)
+        })
+      )
+      .then((data) => {
+        data.forEach((item) => {
+          dispatch({
+            type: 'DELETE_NOTE',
+            storageKey: item.storageKey,
+            noteKey: item.noteKey
+          })
+        })
+      })
+      .catch((err) => {
+        console.error('Cannot Delete note: ' + err)
+      })
+      console.log('Notes were all deleted')
+    } else {
+      Promise.all(
+        selectedNotes.map((note) => {
+          note.isTrashed = true
+
+          return dataApi
+          .updateNote(note.storage, note.key, note)
+        })
+      )
+      .then((newNotes) => {
+        newNotes.forEach((newNote) => {
+          dispatch({
+            type: 'UPDATE_NOTE',
+            note: newNote
+          })
+        })
+        AwsMobileAnalyticsConfig.recordDynamicCustomEvent('EDIT_NOTE')
+        console.log('Notes went to trash')
+      })
+      .catch((err) => {
+        console.error('Notes could not go to trash: ' + err)
+      })
+    }
+    this.setState({ selectedNoteKeys: [] })
+  }
+
+  cloneNote () {
+    const { selectedNoteKeys } = this.state
+    const { dispatch, location } = this.props
+    const { storage, folder } = this.resolveTargetFolder()
+    const notes = this.notes.map((note) => Object.assign({}, note))
+    const selectedNotes = findNotesByKeys(notes, selectedNoteKeys)
+    const firstNote = selectedNotes[0]
+    const eventName = firstNote.type === 'MARKDOWN_NOTE' ? 'ADD_MARKDOWN' : 'ADD_SNIPPET'
+
+    AwsMobileAnalyticsConfig.recordDynamicCustomEvent(eventName)
+    AwsMobileAnalyticsConfig.recordDynamicCustomEvent('ADD_ALLNOTE')
+    dataApi
+      .createNote(storage.key, {
+        type: firstNote.type,
+        folder: folder.key,
+        title: firstNote.title + ' copy',
+        content: firstNote.content
+      })
+      .then((note) => {
+        dispatch({
+          type: 'UPDATE_NOTE',
+          note: note
+        })
+
+        this.setState({
+          selectedNoteKeys: [note.key]
+        })
+
+        hashHistory.push({
+          pathname: location.pathname,
+          query: {key: note.key}
+        })
+      })
+  }
+
+  copyNoteLink (note) {
+    const noteLink = `[${note.title}](:note:${note.key})`
+    return copy(noteLink)
+  }
+
+  save (note) {
+    const { dispatch } = this.props
     dataApi
       .updateNote(note.storage, note.key, note)
       .then((note) => {
-        store.dispatch({
+        dispatch({
           type: 'UPDATE_NOTE',
           note: note
         })
       })
   }
 
-  deleteNote (e, uniqueKey) {
-    this.handleNoteClick(e, uniqueKey)
-    ee.emit('detail:delete')
+  publishMarkdown () {
+    if (this.pendingPublish) {
+      clearTimeout(this.pendingPublish)
+    }
+    this.pendingPublish = setTimeout(() => {
+      this.publishMarkdownNow()
+    }, 1000)
+  }
+
+  publishMarkdownNow () {
+    const {selectedNoteKeys} = this.state
+    const notes = this.notes.map((note) => Object.assign({}, note))
+    const selectedNotes = findNotesByKeys(notes, selectedNoteKeys)
+    const firstNote = selectedNotes[0]
+    const config = ConfigManager.get()
+    const {address, token, authMethod, username, password} = config.blog
+    let authToken = ''
+    if (authMethod === 'USER') {
+      authToken = `Basic ${window.btoa(`${username}:${password}`)}`
+    } else {
+      authToken = `Bearer ${token}`
+    }
+    const contentToRender = firstNote.content.replace(`# ${firstNote.title}`, '')
+    const markdown = new Markdown()
+    const data = {
+      title: firstNote.title,
+      content: markdown.render(contentToRender),
+      status: 'publish'
+    }
+
+    let url = ''
+    let method = ''
+    if (firstNote.blog && firstNote.blog.blogId) {
+      url = `${address}${WP_POST_PATH}/${firstNote.blog.blogId}`
+      method = 'PUT'
+    } else {
+      url = `${address}${WP_POST_PATH}`
+      method = 'POST'
+    }
+    // eslint-disable-next-line no-undef
+    fetch(url, {
+      method: method,
+      body: JSON.stringify(data),
+      headers: {
+        'Authorization': authToken,
+        'Content-Type': 'application/json'
+      }
+    }).then(res => res.json())
+      .then(response => {
+        if (_.isNil(response.link) || _.isNil(response.id)) {
+          return Promise.reject()
+        }
+        firstNote.blog = {
+          blogLink: response.link,
+          blogId: response.id
+        }
+        this.save(firstNote)
+        this.confirmPublish(firstNote)
+      })
+      .catch((error) => {
+        console.error(error)
+        this.confirmPublishError()
+      })
+  }
+
+  confirmPublishError () {
+    const { remote } = electron
+    const { dialog } = remote
+    const alertError = {
+      type: 'warning',
+      message: i18n.__('Publish Failed'),
+      detail: i18n.__('Check and update your blog setting and try again.'),
+      buttons: [i18n.__('Confirm')]
+    }
+    dialog.showMessageBox(remote.getCurrentWindow(), alertError)
+  }
+
+  confirmPublish (note) {
+    const buttonIndex = dialog.showMessageBox(remote.getCurrentWindow(), {
+      type: 'warning',
+      message: i18n.__('Publish Succeeded'),
+      detail: `${note.title} is published at ${note.blog.blogLink}`,
+      buttons: [i18n.__('Confirm'), i18n.__('Open Blog')]
+    })
+
+    if (buttonIndex === 1) {
+      this.openBlog(note)
+    }
+  }
+
+  openBlog (note) {
+    const { shell } = electron
+    shell.openExternal(note.blog.blogLink)
   }
 
   importFromFile () {
-    const { dispatch, location } = this.props
-
     const options = {
       filters: [
         { name: 'Documents', extensions: ['md', 'txt'] }
@@ -421,32 +805,35 @@ class NoteList extends React.Component {
   // Add notes to the current folder
   addNotesFromFiles (filepaths) {
     const { dispatch, location } = this.props
-
-    const targetIndex = this.getTargetIndex()
-
-    const storageKey = this.notes[targetIndex].storage
-    const folderKey = this.notes[targetIndex].folder
+    const { storage, folder } = this.resolveTargetFolder()
 
     if (filepaths === undefined) return
     filepaths.forEach((filepath) => {
       fs.readFile(filepath, (err, data) => {
         if (err) throw Error('File reading error: ', err)
-        const content = data.toString()
-        const newNote = {
-          content: content,
-          folder: folderKey,
-          title: markdown.strip(findNoteTitle(content)),
-          type: 'MARKDOWN_NOTE'
-        }
-        dataApi.createNote(storageKey, newNote)
-        .then((note) => {
-          dispatch({
-            type: 'UPDATE_NOTE',
-            note: note
-          })
-          hashHistory.push({
-            pathname: location.pathname,
-            query: {key: `${note.storage}-${note.key}`}
+
+        fs.stat(filepath, (err, {mtime, birthtime}) => {
+          if (err) throw Error('File stat reading error: ', err)
+
+          const content = data.toString()
+          const newNote = {
+            content: content,
+            folder: folder.key,
+            title: path.basename(filepath, path.extname(filepath)),
+            type: 'MARKDOWN_NOTE',
+            createdAt: birthtime,
+            updatedAt: mtime
+          }
+          dataApi.createNote(storage.key, newNote)
+          .then((note) => {
+            dispatch({
+              type: 'UPDATE_NOTE',
+              note: note
+            })
+            hashHistory.push({
+              pathname: location.pathname,
+              query: {key: getNoteKey(note)}
+            })
           })
         })
       })
@@ -456,19 +843,69 @@ class NoteList extends React.Component {
   getTargetIndex () {
     const { location } = this.props
     const targetIndex = _.findIndex(this.notes, (note) => {
-      return `${note.storage}-${note.key}` === location.query.key
+      return getNoteKey(note) === location.query.key
     })
     return targetIndex
   }
 
+  resolveTargetFolder () {
+    const { data, params } = this.props
+    let storage = data.storageMap.get(params.storageKey)
+
+    // Find first storage
+    if (storage == null) {
+      for (const kv of data.storageMap) {
+        storage = kv[1]
+        break
+      }
+    }
+
+    if (storage == null) this.showMessageBox('No storage for importing note(s)')
+    const folder = _.find(storage.folders, {key: params.folderKey}) || storage.folders[0]
+    if (folder == null) this.showMessageBox('No folder for importing note(s)')
+
+    return {
+      storage,
+      folder
+    }
+  }
+
+  showMessageBox (message) {
+    dialog.showMessageBox(remote.getCurrentWindow(), {
+      type: 'warning',
+      message: message,
+      buttons: [i18n.__('OK')]
+    })
+  }
+
+  getNoteStorage (note) { // note.storage = storage key
+    return this.props.data.storageMap.toJS()[note.storage]
+  }
+
+  getNoteFolder (note) { // note.folder = folder key
+    return _.find(this.getNoteStorage(note).folders, ({ key }) => key === note.folder)
+  }
+
+  getViewType () {
+    const { pathname } = this.props.location
+    const folder = /\/folders\/[a-zA-Z0-9]+/.test(pathname)
+    const storage = /\/storages\/[a-zA-Z0-9]+/.test(pathname) && !folder
+    const allNotes = pathname === '/home'
+    if (allNotes) return 'ALL'
+    if (folder) return 'FOLDER'
+    if (storage) return 'STORAGE'
+  }
+
   render () {
-    let { location, notes, config, dispatch } = this.props
-    let sortFunc = config.sortBy === 'CREATED_AT'
+    const { location, config } = this.props
+    let { notes } = this.props
+    const { selectedNoteKeys } = this.state
+    const sortFunc = config.sortBy === 'CREATED_AT'
       ? sortByCreatedAt
       : config.sortBy === 'ALPHABETICAL'
       ? sortByAlphabetical
       : sortByUpdatedAt
-    const sortedNotes = location.pathname.match(/\/home|\/starred|\/trash/)
+    const sortedNotes = location.pathname.match(/\/starred|\/trash/)
         ? this.getNotes().sort(sortFunc)
         : this.sortByPin(this.getNotes().sort(sortFunc))
     this.notes = notes = sortedNotes.filter((note) => {
@@ -476,19 +913,40 @@ class NoteList extends React.Component {
       if (note.isTrashed !== true || location.pathname === '/trashed') return true
     })
 
-    let noteList = notes
+    moment.locale('en', {
+      relativeTime: {
+        future: 'in %s',
+        past: '%s ago',
+        s: '%ds',
+        ss: '%ss',
+        m: '1m',
+        mm: '%dm',
+        h: 'an hour',
+        hh: '%dh',
+        d: '1d',
+        dd: '%dd',
+        M: '1M',
+        MM: '%dM',
+        y: '1Y',
+        yy: '%dY'
+      }
+    })
+
+    const viewType = this.getViewType()
+
+    const noteList = notes
       .map(note => {
         if (note == null) {
           return null
         }
 
         const isDefault = config.listStyle === 'DEFAULT'
-        const isActive = location.query.key === note.storage + '-' + note.key
+        const uniqueKey = getNoteKey(note)
+        const isActive = selectedNoteKeys.includes(uniqueKey)
         const dateDisplay = moment(
           config.sortBy === 'CREATED_AT'
             ? note.createdAt : note.updatedAt
-        ).fromNow()
-        const key = `${note.storage}-${note.key}`
+        ).fromNow('D')
 
         if (isDefault) {
           return (
@@ -496,11 +954,14 @@ class NoteList extends React.Component {
               isActive={isActive}
               note={note}
               dateDisplay={dateDisplay}
-              key={key}
+              key={uniqueKey}
               handleNoteContextMenu={this.handleNoteContextMenu.bind(this)}
               handleNoteClick={this.handleNoteClick.bind(this)}
               handleDragStart={this.handleDragStart.bind(this)}
               pathname={location.pathname}
+              folderName={this.getNoteFolder(note).name}
+              storageName={this.getNoteStorage(note).name}
+              viewType={viewType}
             />
           )
         }
@@ -509,9 +970,14 @@ class NoteList extends React.Component {
           <NoteItemSimple
             isActive={isActive}
             note={note}
-            key={key}
+            key={uniqueKey}
+            handleNoteContextMenu={this.handleNoteContextMenu.bind(this)}
             handleNoteClick={this.handleNoteClick.bind(this)}
             handleDragStart={this.handleDragStart.bind(this)}
+            pathname={location.pathname}
+            folderName={this.getNoteFolder(note).name}
+            storageName={this.getNoteStorage(note).name}
+            viewType={viewType}
           />
         )
       })
@@ -526,30 +992,31 @@ class NoteList extends React.Component {
           <div styleName='control-sortBy'>
             <i className='fa fa-angle-down' />
             <select styleName='control-sortBy-select'
+              title={i18n.__('Select filter mode')}
               value={config.sortBy}
               onChange={(e) => this.handleSortByChange(e)}
             >
-              <option value='UPDATED_AT'>Updated</option>
-              <option value='CREATED_AT'>Created</option>
-              <option value='ALPHABETICAL'>Alphabetically</option>
+              <option title='Sort by update time' value='UPDATED_AT'>{i18n.__('Updated')}</option>
+              <option title='Sort by create time' value='CREATED_AT'>{i18n.__('Created')}</option>
+              <option title='Sort alphabetically' value='ALPHABETICAL'>{i18n.__('Alphabetically')}</option>
             </select>
           </div>
           <div styleName='control-button-area'>
-            <button styleName={config.listStyle === 'DEFAULT'
+            <button title={i18n.__('Default View')} styleName={config.listStyle === 'DEFAULT'
                 ? 'control-button--active'
                 : 'control-button'
               }
               onClick={(e) => this.handleListStyleButtonClick(e, 'DEFAULT')}
             >
-              <i className='fa fa-th-large' />
+              <img styleName='iconTag' src='../resources/icon/icon-column.svg' />
             </button>
-            <button styleName={config.listStyle === 'SMALL'
+            <button title={i18n.__('Compressed View')} styleName={config.listStyle === 'SMALL'
                 ? 'control-button--active'
                 : 'control-button'
               }
               onClick={(e) => this.handleListStyleButtonClick(e, 'SMALL')}
             >
-              <i className='fa fa-list-ul' />
+              <img styleName='iconTag' src='../resources/icon/icon-column-list.svg' />
             </button>
           </div>
         </div>
@@ -557,6 +1024,7 @@ class NoteList extends React.Component {
           ref='list'
           tabIndex='-1'
           onKeyDown={(e) => this.handleNoteListKeyDown(e)}
+          onKeyUp={this.handleNoteListKeyUp}
         >
           {noteList}
         </div>

@@ -1,4 +1,5 @@
-import React, { PropTypes } from 'react'
+import PropTypes from 'prop-types'
+import React from 'react'
 import CSSModules from 'browser/lib/CSSModules'
 import ReactDOM from 'react-dom'
 import styles from './FolderItem.styl'
@@ -6,6 +7,7 @@ import dataApi from 'browser/main/lib/dataApi'
 import store from 'browser/main/store'
 import { SketchPicker } from 'react-color'
 import { SortableElement, SortableHandle } from 'react-sortable-hoc'
+import i18n from 'browser/lib/i18n'
 
 class FolderItem extends React.Component {
   constructor (props) {
@@ -23,7 +25,7 @@ class FolderItem extends React.Component {
   }
 
   handleEditChange (e) {
-    let { folder } = this.state
+    const { folder } = this.state
 
     folder.name = this.refs.nameInput.value
     this.setState({
@@ -36,7 +38,7 @@ class FolderItem extends React.Component {
   }
 
   confirm () {
-    let { storage, folder } = this.props
+    const { storage, folder } = this.props
     dataApi
       .updateFolder(storage.key, folder.key, {
         color: this.state.folder.color,
@@ -162,7 +164,7 @@ class FolderItem extends React.Component {
   }
 
   handleDeleteConfirmButtonClick (e) {
-    let { storage, folder } = this.props
+    const { storage, folder } = this.props
     dataApi
       .deleteFolder(storage.key, folder.key)
       .then((data) => {
@@ -178,18 +180,18 @@ class FolderItem extends React.Component {
     return (
       <div styleName='folderItem'>
         <div styleName='folderItem-left'>
-          Are you sure to <span styleName='folderItem-left-danger'>delete</span> this folder?
+          {i18n.__('Are you sure to ')} <span styleName='folderItem-left-danger'>{i18n.__(' delete')}</span> {i18n.__('this folder?')}
         </div>
         <div styleName='folderItem-right'>
           <button styleName='folderItem-right-dangerButton'
             onClick={(e) => this.handleDeleteConfirmButtonClick(e)}
           >
-            Confirm
+            {i18n.__('Confirm')}
           </button>
           <button styleName='folderItem-right-button'
             onClick={(e) => this.handleCancelButtonClick(e)}
           >
-            Cancel
+            {i18n.__('Cancel')}
           </button>
         </div>
       </div>
@@ -197,8 +199,8 @@ class FolderItem extends React.Component {
   }
 
   handleEditButtonClick (e) {
-    let { folder: propsFolder } = this.props
-    let { folder: stateFolder } = this.state
+    const { folder: propsFolder } = this.props
+    const { folder: stateFolder } = this.state
     const folder = Object.assign({}, stateFolder, propsFolder)
     this.setState({
       status: 'EDIT',
@@ -215,7 +217,7 @@ class FolderItem extends React.Component {
   }
 
   renderIdle () {
-    let { folder } = this.props
+    const { folder } = this.props
     return (
       <div styleName='folderItem'
         onDoubleClick={(e) => this.handleEditButtonClick(e)}
@@ -230,12 +232,12 @@ class FolderItem extends React.Component {
           <button styleName='folderItem-right-button'
             onClick={(e) => this.handleEditButtonClick(e)}
           >
-            Edit
+            {i18n.__('Edit')}
           </button>
           <button styleName='folderItem-right-button'
             onClick={(e) => this.handleDeleteButtonClick(e)}
           >
-            Delete
+            {i18n.__('Delete')}
           </button>
         </div>
       </div>

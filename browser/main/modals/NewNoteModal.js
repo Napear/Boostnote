@@ -6,6 +6,7 @@ import { hashHistory } from 'react-router'
 import ee from 'browser/main/lib/eventEmitter'
 import ModalEscButton from 'browser/components/ModalEscButton'
 import AwsMobileAnalyticsConfig from 'browser/main/lib/AwsMobileAnalyticsConfig'
+import i18n from 'browser/lib/i18n'
 
 class NewNoteModal extends React.Component {
   constructor (props) {
@@ -26,7 +27,7 @@ class NewNoteModal extends React.Component {
   handleMarkdownNoteButtonClick (e) {
     AwsMobileAnalyticsConfig.recordDynamicCustomEvent('ADD_MARKDOWN')
     AwsMobileAnalyticsConfig.recordDynamicCustomEvent('ADD_ALLNOTE')
-    let { storage, folder, dispatch, location } = this.props
+    const { storage, folder, dispatch, location } = this.props
     dataApi
       .createNote(storage, {
         type: 'MARKDOWN_NOTE',
@@ -35,14 +36,16 @@ class NewNoteModal extends React.Component {
         content: ''
       })
       .then((note) => {
+        const noteHash = note.key
         dispatch({
           type: 'UPDATE_NOTE',
           note: note
         })
         hashHistory.push({
           pathname: location.pathname,
-          query: {key: note.storage + '-' + note.key}
+          query: {key: noteHash}
         })
+        ee.emit('list:jump', noteHash)
         ee.emit('detail:focus')
         this.props.close()
       })
@@ -58,7 +61,7 @@ class NewNoteModal extends React.Component {
   handleSnippetNoteButtonClick (e) {
     AwsMobileAnalyticsConfig.recordDynamicCustomEvent('ADD_SNIPPET')
     AwsMobileAnalyticsConfig.recordDynamicCustomEvent('ADD_ALLNOTE')
-    let { storage, folder, dispatch, location } = this.props
+    const { storage, folder, dispatch, location } = this.props
 
     dataApi
       .createNote(storage, {
@@ -73,14 +76,16 @@ class NewNoteModal extends React.Component {
         }]
       })
       .then((note) => {
+        const noteHash = note.key
         dispatch({
           type: 'UPDATE_NOTE',
           note: note
         })
         hashHistory.push({
           pathname: location.pathname,
-          query: {key: note.storage + '-' + note.key}
+          query: {key: noteHash}
         })
+        ee.emit('list:jump', noteHash)
         ee.emit('detail:focus')
         this.props.close()
       })
@@ -106,7 +111,7 @@ class NewNoteModal extends React.Component {
         onKeyDown={(e) => this.handleKeyDown(e)}
       >
         <div styleName='header'>
-          <div styleName='title'>Make a Note</div>
+          <div styleName='title'>{i18n.__('Make a note')}</div>
         </div>
         <ModalEscButton handleEscButtonClick={(e) => this.handleCloseButtonClick(e)} />
         <div styleName='control'>
@@ -118,8 +123,8 @@ class NewNoteModal extends React.Component {
             <i styleName='control-button-icon'
               className='fa fa-file-text-o'
             /><br />
-            <span styleName='control-button-label'>Markdown Note</span><br />
-            <span styleName='control-button-description'>This format is for creating text documents. Checklists, code blocks and Latex blocks are available.</span>
+            <span styleName='control-button-label'>{i18n.__('Markdown Note')}</span><br />
+            <span styleName='control-button-description'>{i18n.__('This format is for creating text documents. Checklists, code blocks and Latex blocks are available.')}</span>
           </button>
 
           <button styleName='control-button'
@@ -130,13 +135,13 @@ class NewNoteModal extends React.Component {
             <i styleName='control-button-icon'
               className='fa fa-code'
             /><br />
-            <span styleName='control-button-label'>Snippet Note</span><br />
-            <span styleName='control-button-description'>This format is for creating code snippets. Multiple snippets can be grouped into a single note.
+            <span styleName='control-button-label'>{i18n.__('Snippet Note')}</span><br />
+            <span styleName='control-button-description'>{i18n.__('This format is for creating code snippets. Multiple snippets can be grouped into a single note.')}
             </span>
           </button>
 
         </div>
-        <div styleName='description'><i className='fa fa-arrows-h' /> Tab to switch format</div>
+        <div styleName='description'><i className='fa fa-arrows-h' />{i18n.__('Tab to switch format')}</div>
 
       </div>
     )

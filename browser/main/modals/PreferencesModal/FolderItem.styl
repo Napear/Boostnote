@@ -25,7 +25,7 @@
 
 .folderItem-left-key
   color $ui-inactive-text-color
-  font-size 10px
+  font-size 13px
   margin 0 5px
   border none
 
@@ -101,3 +101,28 @@ body[data-theme="dark"]
 
   .folderItem-right-dangerButton
     colorDarkDangerButton()
+
+
+
+body[data-theme="solarized-dark"]
+  .folderItem
+    &:hover
+      background-color $ui-solarized-dark-button-backgroundColor
+
+  .folderItem-left-danger
+    color $danger-color
+
+  .folderItem-left-key
+    color $ui-dark-inactive-text-color
+
+  .folderItem-left-colorButton
+    colorSolarizedDarkPrimaryButton()
+
+  .folderItem-right-button
+    colorSolarizedDarkPrimaryButton()
+
+  .folderItem-right-confirmButton
+    colorSolarizedDarkPrimaryButton()
+
+  .folderItem-right-dangerButton
+    colorSolarizedDarkPrimaryButton()

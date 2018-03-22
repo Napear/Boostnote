@@ -52,12 +52,12 @@ function createNote (storageKey, input) {
       return storage
     })
     .then(function saveNote (storage) {
-      let key = keygen()
+      let key = keygen(true)
       let isUnique = false
       while (!isUnique) {
         try {
           sander.statSync(path.join(storage.path, 'notes', key + '.cson'))
-          key = keygen()
+          key = keygen(true)
         } catch (err) {
           if (err.code === 'ENOENT') {
             isUnique = true
@@ -66,12 +66,16 @@ function createNote (storageKey, input) {
           }
         }
       }
-      let noteData = Object.assign({}, input, {
-        key,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        storage: storageKey
-      })
+      const noteData = Object.assign({},
+        {
+          createdAt: new Date(),
+          updatedAt: new Date()
+        },
+        input, // input may contain more accurate dates
+        {
+          key,
+          storage: storageKey
+        })
 
       CSON.writeFileSync(path.join(storage.path, 'notes', key + '.cson'), _.omit(noteData, ['key', 'storage']))
 

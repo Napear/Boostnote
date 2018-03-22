@@ -1,4 +1,5 @@
-import React, { PropTypes } from 'react'
+import PropTypes from 'prop-types'
+import React from 'react'
 import CSSModules from 'browser/lib/CSSModules'
 import styles from './SnippetNoteDetail.styl'
 import CodeEditor from 'browser/components/CodeEditor'
@@ -7,21 +8,25 @@ import StarButton from './StarButton'
 import TagSelect from './TagSelect'
 import FolderSelect from './FolderSelect'
 import dataApi from 'browser/main/lib/dataApi'
-import { hashHistory } from 'react-router'
+import {hashHistory} from 'react-router'
 import ee from 'browser/main/lib/eventEmitter'
 import CodeMirror from 'codemirror'
+import 'codemirror-mode-elixir'
 import SnippetTab from 'browser/components/SnippetTab'
 import StatusBar from '../StatusBar'
 import context from 'browser/lib/context'
 import ConfigManager from 'browser/main/lib/ConfigManager'
 import _ from 'lodash'
-import { findNoteTitle } from 'browser/lib/findNoteTitle'
+import {findNoteTitle} from 'browser/lib/findNoteTitle'
 import AwsMobileAnalyticsConfig from 'browser/main/lib/AwsMobileAnalyticsConfig'
 import TrashButton from './TrashButton'
+import RestoreButton from './RestoreButton'
+import PermanentDeleteButton from './PermanentDeleteButton'
 import InfoButton from './InfoButton'
 import InfoPanel from './InfoPanel'
 import InfoPanelTrashed from './InfoPanelTrashed'
 import { formatDate } from 'browser/lib/date-formatter'
+import i18n from 'browser/lib/i18n'
 
 function pass (name) {
   switch (name) {
@@ -49,10 +54,28 @@ class SnippetNoteDetail extends React.Component {
     this.state = {
       isMovingNote: false,
       snippetIndex: 0,
+      showArrows: false,
+      enableLeftArrow: false,
+      enableRightArrow: false,
       note: Object.assign({
         description: ''
       }, props.note, {
         snippets: props.note.snippets.map((snippet) => Object.assign({}, snippet))
+      })
+    }
+
+    this.scrollToNextTabThreshold = 0.7
+  }
+
+  componentDidMount () {
+    const visibleTabs = this.visibleTabs
+    const allTabs = this.allTabs
+
+    if (visibleTabs.offsetWidth < allTabs.scrollWidth) {
+      this.setState({
+        showArrows: visibleTabs.offsetWidth < allTabs.scrollWidth,
+        enableRightArrow: allTabs.offsetLeft !== visibleTabs.offsetWidth - allTabs.scrollWidth,
+        enableLeftArrow: allTabs.offsetLeft !== 0
       })
     }
   }
@@ -60,7 +83,7 @@ class SnippetNoteDetail extends React.Component {
   componentWillReceiveProps (nextProps) {
     if (nextProps.note.key !== this.props.note.key && !this.isMovingNote) {
       if (this.saveQueue != null) this.saveNow()
-      let nextNote = Object.assign({
+      const nextNote = Object.assign({
         description: ''
       }, nextProps.note, {
         snippets: nextProps.note.snippets.map((snippet) => Object.assign({}, snippet))
@@ -69,11 +92,12 @@ class SnippetNoteDetail extends React.Component {
         snippetIndex: 0,
         note: nextNote
       }, () => {
-        let { snippets } = this.state.note
+        const { snippets } = this.state.note
         snippets.forEach((snippet, index) => {
           this.refs['code-' + index].reload()
         })
         if (this.refs.tags) this.refs.tags.reset()
+        this.setState(this.getArrowsState())
       })
     }
   }
@@ -83,7 +107,7 @@ class SnippetNoteDetail extends React.Component {
   }
 
   handleChange (e) {
-    let { note } = this.state
+    const { note } = this.state
 
     if (this.refs.tags) note.tags = this.refs.tags.value
     note.description = this.refs.description.value
@@ -105,7 +129,7 @@ class SnippetNoteDetail extends React.Component {
   }
 
   saveNow () {
-    let { note, dispatch } = this.props
+    const { note, dispatch } = this.props
     clearTimeout(this.saveQueue)
     this.saveQueue = null
 
@@ -121,11 +145,11 @@ class SnippetNoteDetail extends React.Component {
   }
 
   handleFolderChange (e) {
-    let { note } = this.state
-    let value = this.refs.folder.value
-    let splitted = value.split('-')
-    let newStorageKey = splitted.shift()
-    let newFolderKey = splitted.shift()
+    const { note } = this.state
+    const value = this.refs.folder.value
+    const splitted = value.split('-')
+    const newStorageKey = splitted.shift()
+    const newFolderKey = splitted.shift()
 
     dataApi
       .moveNote(note.storage, note.key, newStorageKey, newFolderKey)
@@ -134,7 +158,7 @@ class SnippetNoteDetail extends React.Component {
           isMovingNote: true,
           note: Object.assign({}, newNote)
         }, () => {
-          let { dispatch, location } = this.props
+          const { dispatch, location } = this.props
           dispatch({
             type: 'MOVE_NOTE',
             originNote: note,
@@ -143,7 +167,7 @@ class SnippetNoteDetail extends React.Component {
           hashHistory.replace({
             pathname: location.pathname,
             query: {
-              key: newNote.storage + '-' + newNote.key
+              key: newNote.key
             }
           })
           this.setState({
@@ -154,7 +178,7 @@ class SnippetNoteDetail extends React.Component {
   }
 
   handleStarButtonClick (e) {
-    let { note } = this.state
+    const { note } = this.state
     if (!note.isStarred) AwsMobileAnalyticsConfig.recordDynamicCustomEvent('ADD_STAR')
 
     note.isStarred = !note.isStarred
@@ -171,44 +195,44 @@ class SnippetNoteDetail extends React.Component {
   }
 
   handleTrashButtonClick (e) {
-    let { note } = this.state
+    const { note } = this.state
     const { isTrashed } = note
+    const { confirmDeletion } = this.props
 
     if (isTrashed) {
-      let dialogueButtonIndex = dialog.showMessageBox(remote.getCurrentWindow(), {
-        type: 'warning',
-        message: 'Confirm note deletion',
-        detail: 'This will permanently remove this note.',
-        buttons: ['Confirm', 'Cancel']
-      })
-      if (dialogueButtonIndex === 1) return
-      let { note, dispatch } = this.props
-      dataApi
-        .deleteNote(note.storage, note.key)
-        .then((data) => {
-          let dispatchHandler = () => {
-            dispatch({
-              type: 'DELETE_NOTE',
-              storageKey: data.storageKey,
-              noteKey: data.noteKey
-            })
-          }
-          ee.once('list:moved', dispatchHandler)
-        })
+      if (confirmDeletion(true)) {
+        const {note, dispatch} = this.props
+        dataApi
+          .deleteNote(note.storage, note.key)
+          .then((data) => {
+            const dispatchHandler = () => {
+              dispatch({
+                type: 'DELETE_NOTE',
+                storageKey: data.storageKey,
+                noteKey: data.noteKey
+              })
+            }
+            ee.once('list:next', dispatchHandler)
+          })
+          .then(() => ee.emit('list:next'))
+      }
     } else {
-      note.isTrashed = true
+      if (confirmDeletion()) {
+        note.isTrashed = true
 
-      this.setState({
-        note
-      }, () => {
-        this.save()
-      })
+        this.setState({
+          note
+        }, () => {
+          this.save()
+        })
+
+        ee.emit('list:next')
+      }
     }
-    ee.emit('list:next')
   }
 
   handleUndoButtonClick (e) {
-    let { note } = this.state
+    const { note } = this.state
 
     note.isTrashed = false
 
@@ -224,6 +248,51 @@ class SnippetNoteDetail extends React.Component {
     ee.emit('editor:fullscreen')
   }
 
+  handleTabMoveLeftButtonClick (e) {
+    {
+      const left = this.visibleTabs.scrollLeft
+
+      const tabs = this.allTabs.querySelectorAll('div')
+      const lastVisibleTab = Array.from(tabs).find((tab) => {
+        return tab.offsetLeft + tab.offsetWidth >= left
+      })
+
+      if (lastVisibleTab) {
+        const visiblePart = lastVisibleTab.offsetWidth + lastVisibleTab.offsetLeft - left
+        const isFullyVisible = visiblePart > lastVisibleTab.offsetWidth * this.scrollToNextTabThreshold
+        const scrollToTab = (isFullyVisible && lastVisibleTab.previousSibling)
+            ? lastVisibleTab.previousSibling
+            : lastVisibleTab
+
+        // FIXME use `scrollIntoView()` instead of custom method after update to Electron2.0 (with Chrome 61 its possible animate the scroll)
+        this.moveToTab(scrollToTab)
+        // scrollToTab.scrollIntoView({behavior: 'smooth', inline: 'start', block: 'start'})
+      }
+    }
+  }
+
+  handleTabMoveRightButtonClick (e) {
+    const left = this.visibleTabs.scrollLeft
+    const width = this.visibleTabs.offsetWidth
+
+    const tabs = this.allTabs.querySelectorAll('div')
+    const lastVisibleTab = Array.from(tabs).find((tab) => {
+      return tab.offsetLeft + tab.offsetWidth >= width + left
+    })
+
+    if (lastVisibleTab) {
+      const visiblePart = width + left - lastVisibleTab.offsetLeft
+      const isFullyVisible = visiblePart > lastVisibleTab.offsetWidth * this.scrollToNextTabThreshold
+      const scrollToTab = (isFullyVisible && lastVisibleTab.nextSibling)
+          ? lastVisibleTab.nextSibling
+          : lastVisibleTab
+
+      // FIXME use `scrollIntoView()` instead of custom method after update to Electron2.0 (with Chrome 61 its possible animate the scroll)
+      this.moveToTab(scrollToTab)
+      // scrollToTab.scrollIntoView({behavior: 'smooth', inline: 'end', block: 'end'})
+    }
+  }
+
   handleTabPlusButtonClick (e) {
     this.addSnippet()
   }
@@ -234,14 +303,35 @@ class SnippetNoteDetail extends React.Component {
     })
   }
 
+  handleTabDragStart (e, index) {
+    e.dataTransfer.setData('text/plain', index)
+  }
+
+  handleTabDrop (e, index) {
+    const oldIndex = parseInt(e.dataTransfer.getData('text'))
+
+    const snippets = this.state.note.snippets.slice()
+    const draggedSnippet = snippets[oldIndex]
+    snippets[oldIndex] = snippets[index]
+    snippets[index] = draggedSnippet
+    const snippetIndex = index
+
+    const note = Object.assign({}, this.state.note, {snippets})
+    this.setState({ note, snippetIndex }, () => {
+      this.save()
+      this.refs['code-' + index].reload()
+      this.refs['code-' + oldIndex].reload()
+    })
+  }
+
   handleTabDeleteButtonClick (e, index) {
     if (this.state.note.snippets.length > 1) {
       if (this.state.note.snippets[index].content.trim().length > 0) {
-        let dialogIndex = dialog.showMessageBox(remote.getCurrentWindow(), {
+        const dialogIndex = dialog.showMessageBox(remote.getCurrentWindow(), {
           type: 'warning',
-          message: 'Delete a snippet',
-          detail: 'This work cannot be undone.',
-          buttons: ['Confirm', 'Cancel']
+          message: i18n.__('Delete a snippet'),
+          detail: i18n.__('This work cannot be undone.'),
+          buttons: [i18n.__('Confirm'), i18n.__('Cancel')]
         })
         if (dialogIndex === 0) {
           this.deleteSnippetByIndex(index)
@@ -262,6 +352,21 @@ class SnippetNoteDetail extends React.Component {
     this.setState({ note, snippetIndex }, () => {
       this.save()
       this.refs['code-' + this.state.snippetIndex].reload()
+
+      if (this.visibleTabs.offsetWidth > this.allTabs.scrollWidth) {
+        console.log('no need for arrows')
+        this.moveTabBarBy(0)
+      } else {
+        const lastTab = this.allTabs.lastChild
+        if (lastTab.offsetLeft + lastTab.offsetWidth < this.visibleTabs.offsetWidth) {
+          console.log('need to scroll')
+          const width = this.visibleTabs.offsetWidth
+          const newLeft = lastTab.offsetLeft + lastTab.offsetWidth - width
+          this.moveTabBarBy(newLeft > 0 ? -newLeft : 0)
+        } else {
+          this.setState(this.getArrowsState())
+        }
+      }
     })
   }
 
@@ -287,7 +392,7 @@ class SnippetNoteDetail extends React.Component {
 
   handleModeOptionClick (index, name) {
     return (e) => {
-      let snippets = this.state.note.snippets.slice()
+      const snippets = this.state.note.snippets.slice()
       snippets[index].mode = name
       this.setState({note: Object.assign(this.state.note, {snippets: snippets})})
 
@@ -305,7 +410,7 @@ class SnippetNoteDetail extends React.Component {
 
   handleCodeChange (index) {
     return (e) => {
-      let snippets = this.state.note.snippets.slice()
+      const snippets = this.state.note.snippets.slice()
       snippets[index].content = this.refs['code-' + index].value
       this.setState({note: Object.assign(this.state.note, {snippets: snippets})})
       this.setState({
@@ -318,6 +423,7 @@ class SnippetNoteDetail extends React.Component {
 
   handleKeyDown (e) {
     switch (e.keyCode) {
+      // tab key
       case 9:
         if (e.ctrlKey && !e.shiftKey) {
           e.preventDefault()
@@ -330,9 +436,10 @@ class SnippetNoteDetail extends React.Component {
           this.focusEditor()
         }
         break
+      // L key
       case 76:
         {
-          let isSuper = global.process.platform === 'darwin'
+          const isSuper = global.process.platform === 'darwin'
             ? e.metaKey
             : e.ctrlKey
           if (isSuper) {
@@ -341,9 +448,10 @@ class SnippetNoteDetail extends React.Component {
           }
         }
         break
+      // T key
       case 84:
         {
-          let isSuper = global.process.platform === 'darwin'
+          const isSuper = global.process.platform === 'darwin'
             ? e.metaKey
             : e.ctrlKey
           if (isSuper) {
@@ -356,8 +464,8 @@ class SnippetNoteDetail extends React.Component {
   }
 
   handleModeButtonClick (e, index) {
-    let menu = new Menu()
-    CodeMirror.modeInfo.forEach((mode) => {
+    const menu = new Menu()
+    CodeMirror.modeInfo.sort(function (a, b) { return a.name.localeCompare(b.name) }).forEach((mode) => {
       menu.append(new MenuItem({
         label: mode.name,
         click: (e) => this.handleModeOptionClick(index, mode.name)(e)
@@ -397,8 +505,8 @@ class SnippetNoteDetail extends React.Component {
   }
 
   handleIndentSizeItemClick (e, indentSize) {
-    let { config, dispatch } = this.props
-    let editor = Object.assign({}, config.editor, {
+    const { config, dispatch } = this.props
+    const editor = Object.assign({}, config.editor, {
       indentSize
     })
     ConfigManager.set({
@@ -413,8 +521,8 @@ class SnippetNoteDetail extends React.Component {
   }
 
   handleIndentTypeItemClick (e, indentType) {
-    let { config, dispatch } = this.props
-    let editor = Object.assign({}, config.editor, {
+    const { config, dispatch } = this.props
+    const editor = Object.assign({}, config.editor, {
       indentType
     })
     ConfigManager.set({
@@ -432,20 +540,71 @@ class SnippetNoteDetail extends React.Component {
     this.refs.description.focus()
   }
 
+  moveToTab (tab) {
+    const easeOutCubic = t => (--t) * t * t + 1
+    const startScrollPosition = this.visibleTabs.scrollLeft
+    const animationTiming = 300
+    const scrollMoreCoeff = 1.4 // introduce coefficient, because we want to scroll a bit further to see next tab
+
+    let scrollBy = (tab.offsetLeft - startScrollPosition)
+
+    if (tab.offsetLeft > startScrollPosition) {
+      // if tab is on the right side and we want to show the whole tab in visible area,
+      // we need to include width of the tab and visible area in the formula
+      //  ___________________________________________
+      // |____|_______|________|________|_show_this_|
+      //        ↑_____________________↑
+      //            visible area
+      scrollBy += (tab.offsetWidth - this.visibleTabs.offsetWidth)
+    }
+
+    let startTime = null
+    const scrollAnimation = time => {
+      startTime = startTime || time
+      const elapsed = (time - startTime) / animationTiming
+
+      this.visibleTabs.scrollLeft = startScrollPosition + easeOutCubic(elapsed) * scrollBy * scrollMoreCoeff
+      if (elapsed < 1) {
+        window.requestAnimationFrame(scrollAnimation)
+      } else {
+        this.setState(this.getArrowsState())
+      }
+    }
+
+    window.requestAnimationFrame(scrollAnimation)
+  }
+
+  getArrowsState () {
+    const allTabs = this.allTabs
+    const visibleTabs = this.visibleTabs
+
+    const showArrows = visibleTabs.offsetWidth < allTabs.scrollWidth
+    const enableRightArrow = visibleTabs.scrollLeft !== allTabs.scrollWidth - visibleTabs.offsetWidth
+    const enableLeftArrow = visibleTabs.scrollLeft !== 0
+
+    return {showArrows, enableRightArrow, enableLeftArrow}
+  }
+
   addSnippet () {
-    let { note } = this.state
+    const { note } = this.state
 
     note.snippets = note.snippets.concat([{
       name: '',
       mode: 'Plain Text',
       content: ''
     }])
-    let snippetIndex = note.snippets.length - 1
+    const snippetIndex = note.snippets.length - 1
 
-    this.setState({
+    this.setState(Object.assign({
       note,
       snippetIndex
-    }, () => {
+    }, this.getArrowsState()), () => {
+      if (this.state.showArrows) {
+        const tabs = this.allTabs.querySelectorAll('div')
+        if (tabs) {
+          this.moveToTab(tabs[snippetIndex])
+        }
+      }
       this.refs['tab-' + snippetIndex].startRenaming()
     })
   }
@@ -479,26 +638,26 @@ class SnippetNoteDetail extends React.Component {
   showWarning () {
     dialog.showMessageBox(remote.getCurrentWindow(), {
       type: 'warning',
-      message: 'Sorry!',
-      detail: 'md/text import is available only a markdown note.',
-      buttons: ['OK']
+      message: i18n.__('Sorry!'),
+      detail: i18n.__('md/text import is available only a markdown note.'),
+      buttons: [i18n.__('OK')]
     })
   }
 
   render () {
-    let { data, config, location } = this.props
-    let { note } = this.state
+    const { data, config, location } = this.props
+    const { note } = this.state
 
-    let storageKey = note.storage
-    let folderKey = note.folder
+    const storageKey = note.storage
+    const folderKey = note.folder
 
     let editorFontSize = parseInt(config.editor.fontSize, 10)
     if (!(editorFontSize > 0 && editorFontSize < 101)) editorFontSize = 14
     let editorIndentSize = parseInt(config.editor.indentSize, 10)
     if (!(editorFontSize > 0 && editorFontSize < 132)) editorIndentSize = 4
 
-    let tabList = note.snippets.map((snippet, index) => {
-      let isActive = this.state.snippetIndex === index
+    const tabList = note.snippets.map((snippet, index) => {
+      const isActive = this.state.snippetIndex === index
 
       return <SnippetTab
         key={index}
@@ -509,11 +668,13 @@ class SnippetNoteDetail extends React.Component {
         onDelete={(e) => this.handleTabDeleteButtonClick(e, index)}
         onRename={(name) => this.renameSnippetByIndex(index, name)}
         isDeletable={note.snippets.length > 1}
+        onDragStart={(e) => this.handleTabDragStart(e, index)}
+        onDrop={(e) => this.handleTabDrop(e, index)}
       />
     })
 
-    let viewList = note.snippets.map((snippet, index) => {
-      let isActive = this.state.snippetIndex === index
+    const viewList = note.snippets.map((snippet, index) => {
+      const isActive = this.state.snippetIndex === index
 
       let syntax = CodeMirror.findModeByName(pass(snippet.mode))
       if (syntax == null) syntax = CodeMirror.findModeByName('Plain Text')
@@ -539,7 +700,10 @@ class SnippetNoteDetail extends React.Component {
             fontSize={editorFontSize}
             indentType={config.editor.indentType}
             indentSize={editorIndentSize}
+            displayLineNumbers={config.editor.displayLineNumbers}
             keyMap={config.editor.keyMap}
+            scrollPastEnd={config.editor.scrollPastEnd}
+            fetchUrlTitle={config.editor.fetchUrlTitle}
             onChange={(e) => this.handleCodeChange(index)(e)}
             ref={'code-' + index}
           />
@@ -547,7 +711,7 @@ class SnippetNoteDetail extends React.Component {
       </div>
     })
 
-    let options = []
+    const options = []
     data.storageMap.forEach((storage, index) => {
       storage.folders.forEach((folder) => {
         options.push({
@@ -556,17 +720,14 @@ class SnippetNoteDetail extends React.Component {
         })
       })
     })
-    let currentOption = options.filter((option) => option.storage.key === storageKey && option.folder.key === folderKey)[0]
+    const currentOption = options.filter((option) => option.storage.key === storageKey && option.folder.key === folderKey)[0]
 
     const trashTopBar = <div styleName='info'>
       <div styleName='info-left'>
-        <i styleName='undo-button'
-          className='fa fa-undo fa-fw'
-          onClick={(e) => this.handleUndoButtonClick(e)}
-        />
+        <RestoreButton onClick={(e) => this.handleUndoButtonClick(e)} />
       </div>
       <div styleName='info-right'>
-        <TrashButton onClick={(e) => this.handleTrashButtonClick(e)} />
+        <PermanentDeleteButton onClick={(e) => this.handleTrashButtonClick(e)} />
         <InfoButton
           onClick={(e) => this.handleInfoButtonClick(e)}
         />
@@ -577,16 +738,13 @@ class SnippetNoteDetail extends React.Component {
           createdAt={formatDate(note.createdAt)}
           exportAsMd={this.showWarning}
           exportAsTxt={this.showWarning}
+          exportAsHtml={this.showWarning}
         />
       </div>
     </div>
 
     const detailTopBar = <div styleName='info'>
       <div styleName='info-left'>
-        <StarButton styleName='info-left-button'
-          onClick={(e) => this.handleStarButtonClick(e)}
-          isActive={note.isStarred}
-        />
         <div styleName='info-left-top'>
           <FolderSelect styleName='info-left-top-folderSelect'
             value={this.state.note.storage + '-' + this.state.note.folder}
@@ -603,19 +761,27 @@ class SnippetNoteDetail extends React.Component {
         />
       </div>
       <div styleName='info-right'>
-        <TrashButton onClick={(e) => this.handleTrashButtonClick(e)} />
-        <button styleName='control-fullScreenButton'
-          onMouseDown={(e) => this.handleFullScreenButton(e)}
-        >
-          <i className='fa fa-window-maximize' styleName='fullScreen-button' />
+        <StarButton
+          onClick={(e) => this.handleStarButtonClick(e)}
+          isActive={note.isStarred}
+        />
+
+        <button styleName='control-fullScreenButton' title={i18n.__('Fullscreen')}
+          onMouseDown={(e) => this.handleFullScreenButton(e)}>
+          <img styleName='iconInfo' src='../resources/icon/icon-full.svg' />
+          <span styleName='tooltip'>{i18n.__('Fullscreen')}</span>
         </button>
+
+        <TrashButton onClick={(e) => this.handleTrashButtonClick(e)} />
+
         <InfoButton
           onClick={(e) => this.handleInfoButtonClick(e)}
         />
+
         <InfoPanel
           storageName={currentOption.storage.name}
           folderName={currentOption.folder.name}
-          noteLink={`[${note.title}](${location.query.key})`}
+          noteLink={`[${note.title}](:note:${location.query.key})`}
           updatedAt={formatDate(note.updatedAt)}
           createdAt={formatDate(note.createdAt)}
           exportAsMd={this.showWarning}
@@ -641,16 +807,32 @@ class SnippetNoteDetail extends React.Component {
                 fontSize: parseInt(config.preview.fontSize, 10)
               }}
               ref='description'
-              placeholder='Description...'
+              placeholder={i18n.__('Description...')}
               value={this.state.note.description}
               onChange={(e) => this.handleChange(e)}
             />
           </div>
           <div styleName='tabList'>
-            <div styleName='list'>
-              {tabList}
+            <button styleName='tabButton'
+              hidden={!this.state.showArrows}
+              disabled={!this.state.enableLeftArrow}
+              onClick={(e) => this.handleTabMoveLeftButtonClick(e)}
+            >
+              <i className='fa fa-chevron-left' />
+            </button>
+            <div styleName='list' onScroll={(e) => { this.setState(this.getArrowsState()) }} ref={(tabs) => { this.visibleTabs = tabs }}>
+              <div styleName='allTabs' ref={(tabs) => { this.allTabs = tabs }}>
+                {tabList}
+              </div>
             </div>
-            <button styleName='plusButton'
+            <button styleName='tabButton'
+              hidden={!this.state.showArrows}
+              disabled={!this.state.enableRightArrow}
+              onClick={(e) => this.handleTabMoveRightButtonClick(e)}
+            >
+              <i className='fa fa-chevron-right' />
+            </button>
+            <button styleName='tabButton'
               onClick={(e) => this.handleTabPlusButtonClick(e)}
             >
               <i className='fa fa-plus' />
@@ -664,7 +846,7 @@ class SnippetNoteDetail extends React.Component {
             onClick={(e) => this.handleModeButtonClick(e, this.state.snippetIndex)}
           >
             {this.state.note.snippets[this.state.snippetIndex].mode == null
-              ? 'Select Syntax...'
+              ? i18n.__('Select Syntax...')
               : this.state.note.snippets[this.state.snippetIndex].mode
             }&nbsp;
             <i className='fa fa-caret-down' />
@@ -701,7 +883,8 @@ SnippetNoteDetail.propTypes = {
   style: PropTypes.shape({
     left: PropTypes.number
   }),
-  ignorePreviewPointerEvents: PropTypes.bool
+  ignorePreviewPointerEvents: PropTypes.bool,
+  confirmDeletion: PropTypes.bool.isRequired
 }
 
 export default CSSModules(SnippetNoteDetail, styles)

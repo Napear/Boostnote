@@ -1,5 +1,9 @@
-import React, { PropTypes } from 'react'
+import PropTypes from 'prop-types'
+import React from 'react'
 import CSSModules from 'browser/lib/CSSModules'
+const { remote } = require('electron')
+const { Menu } = remote
+import dataApi from 'browser/main/lib/dataApi'
 import styles from './SideNav.styl'
 import { openModal } from 'browser/main/lib/modal'
 import PreferencesModal from '../modals/PreferencesModal'
@@ -9,25 +13,40 @@ import TagListItem from 'browser/components/TagListItem'
 import SideNavFilter from 'browser/components/SideNavFilter'
 import StorageList from 'browser/components/StorageList'
 import NavToggleButton from 'browser/components/NavToggleButton'
+import EventEmitter from 'browser/main/lib/eventEmitter'
+import PreferenceButton from './PreferenceButton'
+import ListButton from './ListButton'
+import TagButton from './TagButton'
+import {SortableContainer} from 'react-sortable-hoc'
+import i18n from 'browser/lib/i18n'
 
 class SideNav extends React.Component {
   // TODO: should not use electron stuff v0.7
+
+  componentDidMount () {
+    EventEmitter.on('side:preferences', this.handleMenuButtonClick)
+  }
+
+  componentWillUnmount () {
+    EventEmitter.off('side:preferences', this.handleMenuButtonClick)
+  }
+
   handleMenuButtonClick (e) {
     openModal(PreferencesModal)
   }
 
   handleHomeButtonClick (e) {
-    let { router } = this.context
+    const { router } = this.context
     router.push('/home')
   }
 
   handleStarredButtonClick (e) {
-    let { router } = this.context
+    const { router } = this.context
     router.push('/starred')
   }
 
   handleToggleButtonClick (e) {
-    let { dispatch, config } = this.props
+    const { dispatch, config } = this.props
 
     ConfigManager.set({isSideNavFolded: !config.isSideNavFolded})
     dispatch({
@@ -37,7 +56,7 @@ class SideNav extends React.Component {
   }
 
   handleTrashedButtonClick (e) {
-    let { router } = this.context
+    const { router } = this.context
     router.push('/trashed')
   }
 
@@ -51,8 +70,19 @@ class SideNav extends React.Component {
     router.push('/alltags')
   }
 
+  onSortEnd (storage) {
+    return ({oldIndex, newIndex}) => {
+      const { dispatch } = this.props
+      dataApi
+        .reorderFolder(storage.key, oldIndex, newIndex)
+        .then((data) => {
+          dispatch({ type: 'REORDER_FOLDER', storage: data.storage })
+        })
+    }
+  }
+
   SideNavComponent (isFolded, storageList) {
-    let { location, data } = this.props
+    const { location, data } = this.props
 
     const isHomeActive = !!location.pathname.match(/^\/home$/)
     const isStarredActive = !!location.pathname.match(/^\/starred$/)
@@ -72,6 +102,10 @@ class SideNav extends React.Component {
             isTrashedActive={isTrashedActive}
             handleStarredButtonClick={(e) => this.handleStarredButtonClick(e)}
             handleTrashedButtonClick={(e) => this.handleTrashedButtonClick(e)}
+            counterTotalNote={data.noteMap._map.size - data.trashedSet._set.size}
+            counterStarredNote={data.starredSet._set.size}
+            counterDelNote={data.trashedSet._set.size}
+            handleFilterButtonContextMenu={this.handleFilterButtonContextMenu.bind(this)}
           />
 
           <StorageList storageList={storageList} />
@@ -82,7 +116,7 @@ class SideNav extends React.Component {
       component = (
         <div styleName='tabBody'>
           <div styleName='tag-title'>
-            <p>Tags</p>
+            <p>{i18n.__('Tags')}</p>
           </div>
           <div styleName='tagList'>
             {this.tagListComponent(data)}
@@ -96,19 +130,28 @@ class SideNav extends React.Component {
 
   tagListComponent () {
     const { data, location } = this.props
-    let tagList = data.tagNoteMap.map((tag, key) => {
-      return key
-    })
+    const tagList = _.sortBy(data.tagNoteMap.map((tag, name) => {
+      return { name, size: tag.size }
+    }), ['name'])
     return (
-      tagList.map(tag => (
-        <TagListItem
-          name={tag}
-          handleClickTagListItem={this.handleClickTagListItem.bind(this)}
-          isActive={!!location.pathname.match(tag)}
-          key={tag}
-        />
-      ))
+      tagList.map(tag => {
+        return (
+          <TagListItem
+            name={tag.name}
+            handleClickTagListItem={this.handleClickTagListItem.bind(this)}
+            isActive={this.getTagActive(location.pathname, tag)}
+            key={tag.name}
+            count={tag.size}
+          />
+        )
+      })
     )
+  }
+
+  getTagActive (path, tag) {
+    const pathSegments = path.split('/')
+    const pathTag = pathSegments[pathSegments.length - 1]
+    return pathTag === tag
   }
 
   handleClickTagListItem (name) {
@@ -116,22 +159,51 @@ class SideNav extends React.Component {
     router.push(`/tags/${name}`)
   }
 
+  emptyTrash (entries) {
+    const { dispatch } = this.props
+    const deletionPromises = entries.map((note) => {
+      return dataApi.deleteNote(note.storage, note.key)
+    })
+    Promise.all(deletionPromises)
+    .then((arrayOfStorageAndNoteKeys) => {
+      arrayOfStorageAndNoteKeys.forEach(({ storageKey, noteKey }) => {
+        dispatch({ type: 'DELETE_NOTE', storageKey, noteKey })
+      })
+    })
+    .catch((err) => {
+      console.error('Cannot Delete note: ' + err)
+    })
+    console.log('Trash emptied')
+  }
+
+  handleFilterButtonContextMenu (event) {
+    const { data } = this.props
+    const trashedNotes = data.trashedSet.toJS().map((uniqueKey) => data.noteMap.get(uniqueKey))
+    const menu = Menu.buildFromTemplate([
+      { label: i18n.__('Empty Trash'), click: () => this.emptyTrash(trashedNotes) }
+    ])
+    menu.popup()
+  }
+
   render () {
-    let { data, location, config, dispatch } = this.props
+    const { data, location, config, dispatch } = this.props
 
-    let isFolded = config.isSideNavFolded
+    const isFolded = config.isSideNavFolded
 
-    let storageList = data.storageMap.map((storage, key) => {
-      return <StorageItem
+    const storageList = data.storageMap.map((storage, key) => {
+      const SortableStorageItem = SortableContainer(StorageItem)
+      return <SortableStorageItem
         key={storage.key}
         storage={storage}
         data={data}
         location={location}
         isFolded={isFolded}
         dispatch={dispatch}
+        onSortEnd={this.onSortEnd.bind(this)(storage)}
+        useDragHandle
       />
     })
-    let style = {}
+    const style = {}
     if (!isFolded) style.width = this.props.width
     const isTagActive = location.pathname.match(/tag/)
     return (
@@ -142,16 +214,11 @@ class SideNav extends React.Component {
       >
         <div styleName='top'>
           <div styleName='switch-buttons'>
-            <button styleName={isTagActive ? 'non-active-button' : 'active-button'} onClick={this.handleSwitchFoldersButtonClick.bind(this)}>Folders</button>
-            <button styleName={isTagActive ? 'active-button' : 'non-active-button'} onClick={this.handleSwitchTagsButtonClick.bind(this)}>Tags</button>
+            <ListButton onClick={this.handleSwitchFoldersButtonClick.bind(this)} isTagActive={isTagActive} />
+            <TagButton onClick={this.handleSwitchTagsButtonClick.bind(this)} isTagActive={isTagActive} />
           </div>
           <div>
-            <button styleName='top-menu'
-              onClick={(e) => this.handleMenuButtonClick(e)}
-            >
-              <i className='fa fa-wrench fa-fw' />
-              <span styleName='top-menu-label'>Preferences</span>
-            </button>
+            <PreferenceButton onClick={this.handleMenuButtonClick} />
           </div>
         </div>
         {this.SideNavComponent(isFolded, storageList)}

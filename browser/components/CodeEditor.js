@@ -1,14 +1,21 @@
-import React, { PropTypes } from 'react'
+import PropTypes from 'prop-types'
+import React from 'react'
 import _ from 'lodash'
 import CodeMirror from 'codemirror'
+import 'codemirror-mode-elixir'
 import path from 'path'
 import copyImage from 'browser/main/lib/dataApi/copyImage'
 import { findStorage } from 'browser/lib/findStorage'
 import fs from 'fs'
+import eventEmitter from 'browser/main/lib/eventEmitter'
+import iconv from 'iconv-lite'
+const { ipcRenderer } = require('electron')
 
 CodeMirror.modeURL = '../node_modules/codemirror/mode/%N/%N.js'
 
 const defaultEditorFontFamily = ['Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', 'source-code-pro', 'monospace']
+const buildCMRulers = (rulers, enableRulers) =>
+  enableRulers ? rulers.map(ruler => ({ column: ruler })) : []
 
 function pass (name) {
   switch (name) {
@@ -29,8 +36,13 @@ export default class CodeEditor extends React.Component {
   constructor (props) {
     super(props)
 
+    this.scrollHandler = _.debounce(this.handleScroll.bind(this), 100, {leading: false, trailing: true})
     this.changeHandler = (e) => this.handleChange(e)
+    this.focusHandler = () => {
+      ipcRenderer.send('editor:focused', true)
+    }
     this.blurHandler = (editor, e) => {
+      ipcRenderer.send('editor:focused', false)
       if (e == null) return null
       let el = e.relatedTarget
       while (el != null) {
@@ -45,21 +57,59 @@ export default class CodeEditor extends React.Component {
     this.loadStyleHandler = (e) => {
       this.editor.refresh()
     }
+    this.searchHandler = (e, msg) => this.handleSearch(msg)
+    this.searchState = null
+  }
+
+  handleSearch (msg) {
+    const cm = this.editor
+    const component = this
+
+    if (component.searchState) cm.removeOverlay(component.searchState)
+    if (msg.length < 3) return
+
+    cm.operation(function () {
+      component.searchState = makeOverlay(msg, 'searching')
+      cm.addOverlay(component.searchState)
+
+      function makeOverlay (query, style) {
+        query = new RegExp(query.replace(/[\-\[\]\/\{\}\(\)\*\+\?\.\\\^\$\|]/g, '\\$&'), 'gi')
+        return {
+          token: function (stream) {
+            query.lastIndex = stream.pos
+            var match = query.exec(stream.string)
+            if (match && match.index === stream.pos) {
+              stream.pos += match[0].length || 1
+              return style
+            } else if (match) {
+              stream.pos = match.index
+            } else {
+              stream.skipToEnd()
+            }
+          }
+        }
+      }
+    })
   }
 
   componentDidMount () {
+    const { rulers, enableRulers } = this.props
     this.value = this.props.value
+
     this.editor = CodeMirror(this.refs.root, {
+      rulers: buildCMRulers(rulers, enableRulers),
       value: this.props.value,
-      lineNumbers: true,
+      lineNumbers: this.props.displayLineNumbers,
       lineWrapping: true,
       theme: this.props.theme,
       indentUnit: this.props.indentSize,
       tabSize: this.props.indentSize,
       indentWithTabs: this.props.indentType !== 'space',
       keyMap: this.props.keyMap,
+      scrollPastEnd: this.props.scrollPastEnd,
       inputStyle: 'textarea',
       dragDrop: false,
+      autoCloseBrackets: true,
       extraKeys: {
         Tab: function (cm) {
           const cursor = cm.getCursor()
@@ -67,7 +117,7 @@ export default class CodeEditor extends React.Component {
           if (cm.somethingSelected()) cm.indentSelection('add')
           else {
             const tabs = cm.getOption('indentWithTabs')
-            if (line.trimLeft() === '- ' || line.trimLeft() === '* ' || line.trimLeft() === '+ ') {
+            if (line.trimLeft().match(/^(-|\*|\+) (\[( |x)] )?$/)) {
               cm.execCommand('goLineStart')
               if (tabs) {
                 cm.execCommand('insertTab')
@@ -87,7 +137,7 @@ export default class CodeEditor extends React.Component {
         'Cmd-T': function (cm) {
           // Do nothing
         },
-        Enter: 'newlineAndIndentContinueMarkdownList',
+        Enter: 'boostNewLineAndIndentContinueMarkdownList',
         'Ctrl-C': (cm) => {
           if (cm.getOption('keyMap').substr(0, 3) === 'vim') {
             document.execCommand('copy')
@@ -99,17 +149,23 @@ export default class CodeEditor extends React.Component {
 
     this.setMode(this.props.mode)
 
+    this.editor.on('focus', this.focusHandler)
     this.editor.on('blur', this.blurHandler)
     this.editor.on('change', this.changeHandler)
     this.editor.on('paste', this.pasteHandler)
+    eventEmitter.on('top:search', this.searchHandler)
 
-    let editorTheme = document.getElementById('editorTheme')
+    eventEmitter.emit('code:init')
+    this.editor.on('scroll', this.scrollHandler)
+
+    const editorTheme = document.getElementById('editorTheme')
     editorTheme.addEventListener('load', this.loadStyleHandler)
 
     CodeMirror.Vim.defineEx('quit', 'q', this.quitEditor)
     CodeMirror.Vim.defineEx('q!', 'q!', this.quitEditor)
     CodeMirror.Vim.defineEx('wq', 'wq', this.quitEditor)
     CodeMirror.Vim.defineEx('qw', 'qw', this.quitEditor)
+    CodeMirror.Vim.map('ZZ', ':q', 'normal')
   }
 
   quitEditor () {
@@ -117,15 +173,19 @@ export default class CodeEditor extends React.Component {
   }
 
   componentWillUnmount () {
+    this.editor.off('focus', this.focusHandler)
     this.editor.off('blur', this.blurHandler)
     this.editor.off('change', this.changeHandler)
     this.editor.off('paste', this.pasteHandler)
-    let editorTheme = document.getElementById('editorTheme')
+    eventEmitter.off('top:search', this.searchHandler)
+    this.editor.off('scroll', this.scrollHandler)
+    const editorTheme = document.getElementById('editorTheme')
     editorTheme.removeEventListener('load', this.loadStyleHandler)
   }
 
   componentDidUpdate (prevProps, prevState) {
     let needRefresh = false
+    const { rulers, enableRulers } = this.props
     if (prevProps.mode !== this.props.mode) {
       this.setMode(this.props.mode)
     }
@@ -143,12 +203,24 @@ export default class CodeEditor extends React.Component {
       needRefresh = true
     }
 
+    if (prevProps.enableRulers !== enableRulers || prevProps.rulers !== rulers) {
+      this.editor.setOption('rulers', buildCMRulers(rulers, enableRulers))
+    }
+
     if (prevProps.indentSize !== this.props.indentSize) {
       this.editor.setOption('indentUnit', this.props.indentSize)
       this.editor.setOption('tabSize', this.props.indentSize)
     }
     if (prevProps.indentType !== this.props.indentType) {
       this.editor.setOption('indentWithTabs', this.props.indentType !== 'space')
+    }
+
+    if (prevProps.displayLineNumbers !== this.props.displayLineNumbers) {
+      this.editor.setOption('lineNumbers', this.props.displayLineNumbers)
+    }
+
+    if (prevProps.scrollPastEnd !== this.props.scrollPastEnd) {
+      this.editor.setOption('scrollPastEnd', this.props.scrollPastEnd)
     }
 
     if (needRefresh) {
@@ -196,7 +268,7 @@ export default class CodeEditor extends React.Component {
   }
 
   setValue (value) {
-    let cursor = this.editor.getCursor()
+    const cursor = this.editor.getCursor()
     this.editor.setValue(value)
     this.editor.setCursor(cursor)
   }
@@ -213,37 +285,114 @@ export default class CodeEditor extends React.Component {
   }
 
   insertImageMd (imageMd) {
-    const textarea = this.editor.getInputField()
-    const cm = this.editor
-    cm.replaceSelection(`${textarea.value.substr(0, textarea.selectionStart)}${imageMd}${textarea.value.substr(textarea.selectionEnd)}`)
+    this.editor.replaceSelection(imageMd)
   }
 
   handlePaste (editor, e) {
-    const dataTransferItem = e.clipboardData.items[0]
-    if (!dataTransferItem.type.match('image')) return
+    const clipboardData = e.clipboardData
+    const dataTransferItem = clipboardData.items[0]
+    const pastedTxt = clipboardData.getData('text')
+    const isURL = (str) => {
+      const matcher = /^(?:\w+:)?\/\/([^\s\.]+\.\S{2}|localhost[\:?\d]*)\S*$/
+      return matcher.test(str)
+    }
+    const isInLinkTag = (editor) => {
+      const startCursor = editor.getCursor('start')
+      const prevChar = editor.getRange(
+        { line: startCursor.line, ch: startCursor.ch - 2 },
+        { line: startCursor.line, ch: startCursor.ch }
+      )
+      const endCursor = editor.getCursor('end')
+      const nextChar = editor.getRange(
+        { line: endCursor.line, ch: endCursor.ch },
+        { line: endCursor.line, ch: endCursor.ch + 1 }
+      )
+      return prevChar === '](' && nextChar === ')'
+    }
+    if (dataTransferItem.type.match('image')) {
+      const blob = dataTransferItem.getAsFile()
+      const reader = new FileReader()
+      let base64data
 
-    const blob = dataTransferItem.getAsFile()
-    let reader = new FileReader()
-    let base64data
-
-    reader.readAsDataURL(blob)
-    reader.onloadend = () => {
-      base64data = reader.result.replace(/^data:image\/png;base64,/, '')
-      base64data += base64data.replace('+', ' ')
-      const binaryData = new Buffer(base64data, 'base64').toString('binary')
-      const imageName = Math.random().toString(36).slice(-16)
-      const storagePath = findStorage(this.props.storageKey).path
-      const imageDir = path.join(storagePath, 'images')
-      if (!fs.existsSync(imageDir)) fs.mkdirSync(imageDir)
-      const imagePath = path.join(imageDir, `${imageName}.png`)
-      fs.writeFile(imagePath, binaryData, 'binary')
-      const imageMd = `![${imageName}](${path.join('/:storage', `${imageName}.png`)})`
-      this.insertImageMd(imageMd)
+      reader.readAsDataURL(blob)
+      reader.onloadend = () => {
+        base64data = reader.result.replace(/^data:image\/png;base64,/, '')
+        base64data += base64data.replace('+', ' ')
+        const binaryData = new Buffer(base64data, 'base64').toString('binary')
+        const imageName = Math.random().toString(36).slice(-16)
+        const storagePath = findStorage(this.props.storageKey).path
+        const imageDir = path.join(storagePath, 'images')
+        if (!fs.existsSync(imageDir)) fs.mkdirSync(imageDir)
+        const imagePath = path.join(imageDir, `${imageName}.png`)
+        fs.writeFile(imagePath, binaryData, 'binary')
+        const imageMd = `![${imageName}](${path.join('/:storage', `${imageName}.png`)})`
+        this.insertImageMd(imageMd)
+      }
+    } else if (this.props.fetchUrlTitle && isURL(pastedTxt) && !isInLinkTag(editor)) {
+      this.handlePasteUrl(e, editor, pastedTxt)
     }
   }
 
+  handleScroll (e) {
+    if (this.props.onScroll) {
+      this.props.onScroll(e)
+    }
+  }
+
+  handlePasteUrl (e, editor, pastedTxt) {
+    e.preventDefault()
+    const taggedUrl = `<${pastedTxt}>`
+    editor.replaceSelection(taggedUrl)
+
+    fetch(pastedTxt, {
+      method: 'get'
+    }).then((response) => {
+      return this.decodeResponse(response)
+    }).then((response) => {
+      const parsedResponse = (new window.DOMParser()).parseFromString(response, 'text/html')
+      const value = editor.getValue()
+      const cursor = editor.getCursor()
+      const LinkWithTitle = `[${parsedResponse.title}](${pastedTxt})`
+      const newValue = value.replace(taggedUrl, LinkWithTitle)
+      editor.setValue(newValue)
+      editor.setCursor(cursor)
+    }).catch((e) => {
+      const value = editor.getValue()
+      const newValue = value.replace(taggedUrl, pastedTxt)
+      const cursor = editor.getCursor()
+      editor.setValue(newValue)
+      editor.setCursor(cursor)
+    })
+  }
+
+  decodeResponse (response) {
+    const headers = response.headers
+    const _charset = headers.has('content-type')
+      ? this.extractContentTypeCharset(headers.get('content-type'))
+      : undefined
+    return response.arrayBuffer().then((buff) => {
+      return new Promise((resolve, reject) => {
+        try {
+          const charset = _charset !== undefined && iconv.encodingExists(_charset) ? _charset : 'utf-8'
+          resolve(iconv.decode(new Buffer(buff), charset).toString())
+        } catch (e) {
+          reject(e)
+        }
+      })
+    })
+  }
+
+  extractContentTypeCharset (contentType) {
+    return contentType.split(';').filter((str) => {
+      return str.trim().toLowerCase().startsWith('charset')
+    }).map((str) => {
+      return str.replace(/['"]/g, '').split('=')[1]
+    })[0]
+  }
+
   render () {
-    let { className, fontFamily, fontSize } = this.props
+    const { className, fontSize } = this.props
+    let fontFamily = this.props.fontFamily
     fontFamily = _.isString(fontFamily) && fontFamily.length > 0
       ? [fontFamily].concat(defaultEditorFontFamily)
       : defaultEditorFontFamily
@@ -267,6 +416,8 @@ export default class CodeEditor extends React.Component {
 
 CodeEditor.propTypes = {
   value: PropTypes.string,
+  enableRulers: PropTypes.bool,
+  rulers: PropTypes.arrayOf(Number),
   mode: PropTypes.string,
   className: PropTypes.string,
   onBlur: PropTypes.func,

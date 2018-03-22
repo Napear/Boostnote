@@ -1,4 +1,5 @@
-import React, { PropTypes } from 'react'
+import PropTypes from 'prop-types'
+import React from 'react'
 import CSSModules from 'browser/lib/CSSModules'
 import styles from './Detail.styl'
 import _ from 'lodash'
@@ -6,6 +7,7 @@ import MarkdownNoteDetail from './MarkdownNoteDetail'
 import SnippetNoteDetail from './SnippetNoteDetail'
 import ee from 'browser/main/lib/eventEmitter'
 import StatusBar from '../StatusBar'
+import i18n from 'browser/lib/i18n'
 
 const OSX = global.process.platform === 'darwin'
 
@@ -31,15 +33,32 @@ class Detail extends React.Component {
     ee.off('detail:delete', this.deleteHandler)
   }
 
+  confirmDeletion (permanent) {
+    if (this.props.config.ui.confirmDeletion || permanent) {
+      const electron = require('electron')
+      const { remote } = electron
+      const { dialog } = remote
+
+      const alertConfig = {
+        type: 'warning',
+        message: i18n.__('Confirm note deletion'),
+        detail: i18n.__('This will permanently remove this note.'),
+        buttons: [i18n.__('Confirm'), i18n.__('Cancel')]
+      }
+
+      const dialogueButtonIndex = dialog.showMessageBox(remote.getCurrentWindow(), alertConfig)
+      return dialogueButtonIndex === 0
+    }
+
+    return true
+  }
+
   render () {
-    let { location, data, config } = this.props
+    const { location, data, config } = this.props
     let note = null
     if (location.query.key != null) {
-      let splitted = location.query.key.split('-')
-      let storageKey = splitted.shift()
-      let noteKey = splitted.shift()
-
-      note = data.noteMap.get(storageKey + '-' + noteKey)
+      const noteKey = location.query.key
+      note = data.noteMap.get(noteKey)
     }
 
     if (note == null) {
@@ -49,7 +68,7 @@ class Detail extends React.Component {
           tabIndex='0'
         >
           <div styleName='empty'>
-            <div styleName='empty-message'>{OSX ? 'Command(⌘)' : 'Ctrl(^)'} + N<br />to create a new note</div>
+            <div styleName='empty-message'>{OSX ? i18n.__('Command(⌘)') : i18n.__('Ctrl(^)')} + N<br />{i18n.__('to create a new note')}</div>
           </div>
           <StatusBar
             {..._.pick(this.props, ['config', 'location', 'dispatch'])}
@@ -63,6 +82,7 @@ class Detail extends React.Component {
         <SnippetNoteDetail
           note={note}
           config={config}
+          confirmDeletion={(permanent) => this.confirmDeletion(permanent)}
           ref='root'
           {..._.pick(this.props, [
             'dispatch',
@@ -79,6 +99,7 @@ class Detail extends React.Component {
       <MarkdownNoteDetail
         note={note}
         config={config}
+        confirmDeletion={(permanent) => this.confirmDeletion(permanent)}
         ref='root'
         {..._.pick(this.props, [
           'dispatch',

@@ -42,6 +42,8 @@ top-bar--height = 50px
   background-color transparent
   color $ui-text-color
   font-size 16px
+  .saving--warning
+    haveToSave()
 
 .nav-button--active
   @extend .nav-button
@@ -49,6 +51,8 @@ top-bar--height = 50px
   background-color $ui-button--active-backgroundColor
   &:hover
     color $ui-text-color
+  .saving--warning
+    haveToSave()
 
 .nav-button-icon
   display block
@@ -86,3 +90,29 @@ body[data-theme="dark"]
     background-color $dark-primary-button-background--active
     &:hover
       color white
+      
+
+body[data-theme="solarized-dark"]
+  .root
+    background-color transparent
+  .top-bar
+    background-color transparent
+    border-color $ui-solarized-dark-borderColor
+    p
+      color $ui-solarized-dark-text-color
+  .nav
+    background-color transparent
+    border-color $ui-solarized-dark-borderColor
+  .nav-button
+    background-color transparent
+    color $ui-solarized-dark-text-color
+    &:hover
+      color $ui-solarized-dark-text-color
+
+  .nav-button--active
+    @extend .nav-button
+    color $ui-solarized-dark-button--active-color
+    background-color $ui-solarized-dark-button--active-backgroundColor
+    &:hover
+      color white
+

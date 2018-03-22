@@ -1,8 +1,11 @@
-import React, { PropTypes } from 'react'
+import PropTypes from 'prop-types'
+import React from 'react'
 import CSSModules from 'browser/lib/CSSModules'
 import styles from './ConfigTab.styl'
 import ConfigManager from 'browser/main/lib/ConfigManager'
 import store from 'browser/main/store'
+import _ from 'lodash'
+import i18n from 'browser/lib/i18n'
 
 const electron = require('electron')
 const ipc = electron.ipcRenderer
@@ -21,15 +24,16 @@ class HotkeyTab extends React.Component {
     this.handleSettingDone = () => {
       this.setState({keymapAlert: {
         type: 'success',
-        message: 'Successfully applied!'
+        message: i18n.__('Successfully applied!')
       }})
     }
     this.handleSettingError = (err) => {
       this.setState({keymapAlert: {
         type: 'error',
-        message: err.message != null ? err.message : 'Error occurs!'
+        message: err.message != null ? err.message : i18n.__('Error occurs!')
       }})
     }
+    this.oldHotkey = this.state.config.hotkey
     ipc.addListener('APP_SETTING_DONE', this.handleSettingDone)
     ipc.addListener('APP_SETTING_ERROR', this.handleSettingError)
   }
@@ -40,7 +44,7 @@ class HotkeyTab extends React.Component {
   }
 
   handleSaveButtonClick (e) {
-    let newConfig = {
+    const newConfig = {
       hotkey: this.state.config.hotkey
     }
 
@@ -50,6 +54,8 @@ class HotkeyTab extends React.Component {
       type: 'SET_UI',
       config: newConfig
     })
+    this.clearMessage()
+    this.props.haveToSave()
   }
 
   handleHintToggleButtonClick (e) {
@@ -59,31 +65,47 @@ class HotkeyTab extends React.Component {
   }
 
   handleHotkeyChange (e) {
-    let { config } = this.state
+    const { config } = this.state
     config.hotkey = {
-      toggleFinder: this.refs.toggleFinder.value,
       toggleMain: this.refs.toggleMain.value
     }
     this.setState({
       config
     })
+    if (_.isEqual(this.oldHotkey, config.hotkey)) {
+      this.props.haveToSave()
+    } else {
+      this.props.haveToSave({
+        tab: 'Hotkey',
+        type: 'warning',
+        message: i18n.__('You have to save!')
+      })
+    }
+  }
+
+  clearMessage () {
+    _.debounce(() => {
+      this.setState({
+        keymapAlert: null
+      })
+    }, 2000)()
   }
 
   render () {
-    let keymapAlert = this.state.keymapAlert
-    let keymapAlertElement = keymapAlert != null
+    const keymapAlert = this.state.keymapAlert
+    const keymapAlertElement = keymapAlert != null
       ? <p className={`alert ${keymapAlert.type}`}>
         {keymapAlert.message}
       </p>
       : null
-    let { config } = this.state
+    const { config } = this.state
 
     return (
       <div styleName='root'>
         <div styleName='group'>
-          <div styleName='group-header'>Hotkey</div>
+          <div styleName='group-header'>{i18n.__('Hotkeys')}</div>
           <div styleName='group-section'>
-            <div styleName='group-section-label'>Toggle Main</div>
+            <div styleName='group-section-label'>{i18n.__('Show/Hide Boostnote')}</div>
             <div styleName='group-section-control'>
               <input styleName='group-section-control-input'
                 onChange={(e) => this.handleHotkeyChange(e)}
@@ -93,28 +115,17 @@ class HotkeyTab extends React.Component {
               />
             </div>
           </div>
-          <div styleName='group-section'>
-            <div styleName='group-section-label'>Toggle Finder (Quick search)</div>
-            <div styleName='group-section-control'>
-              <input styleName='group-section-control-input'
-                onChange={(e) => this.handleHotkeyChange(e)}
-                ref='toggleFinder'
-                value={config.hotkey.toggleFinder}
-                type='text'
-              />
-            </div>
-          </div>
           <div styleName='group-control'>
             <button styleName='group-control-leftButton'
               onClick={(e) => this.handleHintToggleButtonClick(e)}
             >
               {this.state.isHotkeyHintOpen
-                ? 'Hide Hint'
-                : 'Hint?'
+                ? 'Hide Help'
+                : 'Help'
               }
             </button>
             <button styleName='group-control-rightButton'
-              onClick={(e) => this.handleSaveButtonClick(e)}>Save
+              onClick={(e) => this.handleSaveButtonClick(e)}>{i18n.__('Save')}
             </button>
             {keymapAlertElement}
           </div>
@@ -150,7 +161,8 @@ class HotkeyTab extends React.Component {
 }
 
 HotkeyTab.propTypes = {
-  dispatch: PropTypes.func
+  dispatch: PropTypes.func,
+  haveToSave: PropTypes.func
 }
 
 export default CSSModules(HotkeyTab, styles)

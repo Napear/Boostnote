@@ -5,7 +5,7 @@ const CSON = require('@rokt33r/season')
 const { findStorage } = require('browser/lib/findStorage')
 
 function validateInput (input) {
-  let validatedInput = {}
+  const validatedInput = {}
 
   if (input.tags != null) {
     if (!_.isArray(input.tags)) validatedInput.tags = []
@@ -30,6 +30,9 @@ function validateInput (input) {
     validatedInput.isPinned = !!input.isPinned
   }
 
+  if (!_.isNil(input.blog)) {
+    validatedInput.blog = input.blog
+  }
   validatedInput.type = input.type
   switch (input.type) {
     case 'MARKDOWN_NOTE':
@@ -81,7 +84,7 @@ function updateNote (storageKey, noteKey, input) {
   return resolveStorageData(targetStorage)
     .then(function saveNote (storage) {
       let noteData
-      let notePath = path.join(storage.path, 'notes', noteKey + '.cson')
+      const notePath = path.join(storage.path, 'notes', noteKey + '.cson')
       try {
         noteData = CSON.readFileSync(notePath)
       } catch (err) {

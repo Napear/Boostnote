@@ -1,4 +1,5 @@
-import React, { PropTypes } from 'react'
+import PropTypes from 'prop-types'
+import React from 'react'
 import CSSModules from 'browser/lib/CSSModules'
 import styles from './Main.styl'
 import { connect } from 'react-redux'
@@ -9,16 +10,14 @@ import Detail from './Detail'
 import dataApi from 'browser/main/lib/dataApi'
 import _ from 'lodash'
 import ConfigManager from 'browser/main/lib/ConfigManager'
-import modal from 'browser/main/lib/modal'
-import InitModal from 'browser/main/modals/InitModal'
-import mixpanel from 'browser/main/lib/mixpanel'
 import mobileAnalytics from 'browser/main/lib/AwsMobileAnalyticsConfig'
 import eventEmitter from 'browser/main/lib/eventEmitter'
-import RealtimeNotification from 'browser/components/RealtimeNotification'
-
-function focused () {
-  mixpanel.track('MAIN_FOCUSED')
-}
+import { hashHistory } from 'react-router'
+import store from 'browser/main/store'
+import i18n from 'browser/lib/i18n'
+const path = require('path')
+const electron = require('electron')
+const { remote } = electron
 
 class Main extends React.Component {
 
@@ -29,7 +28,7 @@ class Main extends React.Component {
       mobileAnalytics.initAwsMobileAnalytics()
     }
 
-    let { config } = props
+    const { config } = props
 
     this.state = {
       isRightSliderFocused: false,
@@ -45,7 +44,7 @@ class Main extends React.Component {
   }
 
   getChildContext () {
-    let { status, config } = this.props
+    const { status, config } = this.props
 
     return {
       status,
@@ -53,13 +52,133 @@ class Main extends React.Component {
     }
   }
 
+  init () {
+    dataApi
+      .addStorage({
+        name: 'My Storage',
+        path: path.join(remote.app.getPath('home'), 'Boostnote')
+      })
+      .then((data) => {
+        return data
+      })
+      .then((data) => {
+        if (data.storage.folders[0] != null) {
+          return data
+        } else {
+          return dataApi
+            .createFolder(data.storage.key, {
+              color: '#1278BD',
+              name: 'Default'
+            })
+            .then((_data) => {
+              return {
+                storage: _data.storage,
+                notes: data.notes
+              }
+            })
+        }
+      })
+      .then((data) => {
+        console.log(data)
+        store.dispatch({
+          type: 'ADD_STORAGE',
+          storage: data.storage,
+          notes: data.notes
+        })
+
+        const defaultSnippetNote = dataApi
+          .createNote(data.storage.key, {
+            type: 'SNIPPET_NOTE',
+            folder: data.storage.folders[0].key,
+            title: 'Snippet note example',
+            description: 'Snippet note example\nYou can store a series of snippets as a single note, like Gist.',
+            snippets: [
+              {
+                name: 'example.html',
+                mode: 'html',
+                content: '<html>\n<body>\n<h1 id=\'hello\'>Enjoy Boostnote!</h1>\n</body>\n</html>'
+              },
+              {
+                name: 'example.js',
+                mode: 'javascript',
+                content: 'var boostnote = document.getElementById(\'enjoy\').innerHTML\n\nconsole.log(boostnote)'
+              }
+            ]
+          })
+          .then((note) => {
+            store.dispatch({
+              type: 'UPDATE_NOTE',
+              note: note
+            })
+          })
+        const defaultMarkdownNote = dataApi
+          .createNote(data.storage.key, {
+            type: 'MARKDOWN_NOTE',
+            folder: data.storage.folders[0].key,
+            title: 'Welcome to Boostnote!',
+            content: '# Welcome to Boostnote!\n## Click here to edit markdown :wave:\n\n<iframe width="560" height="315" src="https://www.youtube.com/embed/L0qNPLsvmyM" frameborder="0" allowfullscreen></iframe>\n\n## Docs :memo:\n- [Boostnote | Boost your happiness, productivity and creativity.](https://hackernoon.com/boostnote-boost-your-happiness-productivity-and-creativity-315034efeebe)\n- [Cloud Syncing & Backups](https://github.com/BoostIO/Boostnote/wiki/Cloud-Syncing-and-Backup)\n- [How to sync your data across Desktop and Mobile apps](https://github.com/BoostIO/Boostnote/wiki/Sync-Data-Across-Desktop-and-Mobile-apps)\n- [Convert data from **Evernote** to Boostnote.](https://github.com/BoostIO/Boostnote/wiki/Evernote)\n- [Keyboard Shortcuts](https://github.com/BoostIO/Boostnote/wiki/Keyboard-Shortcuts)\n- [Keymaps in Editor mode](https://github.com/BoostIO/Boostnote/wiki/Keymaps-in-Editor-mode)\n- [How to set syntax highlight in Snippet note](https://github.com/BoostIO/Boostnote/wiki/Syntax-Highlighting)\n\n---\n\n## Article Archive :books:\n- [Reddit English](http://bit.ly/2mOJPu7)\n- [Reddit Spanish](https://www.reddit.com/r/boostnote_es/)\n- [Reddit Chinese](https://www.reddit.com/r/boostnote_cn/)\n- [Reddit Japanese](https://www.reddit.com/r/boostnote_jp/)\n\n---\n\n## Community :beers:\n- [GitHub](http://bit.ly/2AWWzkD)\n- [Twitter](http://bit.ly/2z8BUJZ)\n- [Facebook Group](http://bit.ly/2jcca8t)'
+          })
+          .then((note) => {
+            store.dispatch({
+              type: 'UPDATE_NOTE',
+              note: note
+            })
+          })
+
+        return Promise.resolve(defaultSnippetNote)
+          .then(defaultMarkdownNote)
+          .then(() => data.storage)
+      })
+      .then((storage) => {
+        hashHistory.push('/storages/' + storage.key)
+      })
+      .catch((err) => {
+        throw err
+      })
+  }
+
   componentDidMount () {
-    let { dispatch, config } = this.props
+    const { dispatch, config } = this.props
 
     if (config.ui.theme === 'dark') {
       document.body.setAttribute('data-theme', 'dark')
+    } else if (config.ui.theme === 'white') {
+      document.body.setAttribute('data-theme', 'white')
+    } else if (config.ui.theme === 'solarized-dark') {
+      document.body.setAttribute('data-theme', 'solarized-dark')
     } else {
       document.body.setAttribute('data-theme', 'default')
+    }
+    if (config.ui.language === 'sq') {
+      i18n.setLocale('sq')
+    } else if (config.ui.language === 'zh-CN') {
+      i18n.setLocale('zh-CN')
+    } else if (config.ui.language === 'zh-TW') {
+      i18n.setLocale('zh-TW')
+    } else if (config.ui.language === 'da') {
+      i18n.setLocale('da')
+    } else if (config.ui.language === 'fr') {
+      i18n.setLocale('fr')
+    } else if (config.ui.language === 'de') {
+      i18n.setLocale('de')
+    } else if (config.ui.language === 'hu') {
+      i18n.setLocale('hu')
+    } else if (config.ui.language === 'ja') {
+      i18n.setLocale('ja')
+    } else if (config.ui.language === 'ko') {
+      i18n.setLocale('ko')
+    } else if (config.ui.language === 'no') {
+      i18n.setLocale('no')
+    } else if (config.ui.language === 'pl') {
+      i18n.setLocale('pl')
+    } else if (config.ui.language === 'pt') {
+      i18n.setLocale('pt')
+    } else if (config.ui.language === 'ru') {
+      i18n.setLocale('ru')
+    } else if (config.ui.language === 'es') {
+      i18n.setLocale('es')
+    } else {
+      i18n.setLocale('en')
     }
 
     // Reload all data
@@ -72,16 +191,14 @@ class Main extends React.Component {
         })
 
         if (data.storages.length < 1) {
-          modal.open(InitModal)
+          this.init()
         }
       })
 
     eventEmitter.on('editor:fullscreen', this.toggleFullScreen)
-    window.addEventListener('focus', focused)
   }
 
   componentWillUnmount () {
-    window.removeEventListener('focus', focused)
     eventEmitter.off('editor:fullscreen', this.toggleFullScreen)
   }
 
@@ -105,8 +222,8 @@ class Main extends React.Component {
       this.setState({
         isRightSliderFocused: false
       }, () => {
-        let { dispatch } = this.props
-        let newListWidth = this.state.listWidth
+        const { dispatch } = this.props
+        const newListWidth = this.state.listWidth
         // TODO: ConfigManager should dispatch itself.
         ConfigManager.set({listWidth: newListWidth})
         dispatch({
@@ -121,8 +238,8 @@ class Main extends React.Component {
       this.setState({
         isLeftSliderFocused: false
       }, () => {
-        let { dispatch } = this.props
-        let navWidth = this.state.navWidth
+        const { dispatch } = this.props
+        const navWidth = this.state.navWidth
         // TODO: ConfigManager should dispatch itself.
         ConfigManager.set({ navWidth })
         dispatch({
@@ -135,7 +252,7 @@ class Main extends React.Component {
 
   handleMouseMove (e) {
     if (this.state.isRightSliderFocused) {
-      let offset = this.refs.body.getBoundingClientRect().left
+      const offset = this.refs.body.getBoundingClientRect().left
       let newListWidth = e.pageX - offset
       if (newListWidth < 10) {
         newListWidth = 10
@@ -188,18 +305,10 @@ class Main extends React.Component {
   }
 
   render () {
-    let { config } = this.props
+    const { config } = this.props
 
     // the width of the navigation bar when it is folded/collapsed
     const foldedNavigationWidth = 44
-    let notificationBarOffsetLeft
-    if (this.state.fullScreen) {
-      notificationBarOffsetLeft = 0
-    } else if (config.isSideNavFolded) {
-      notificationBarOffsetLeft = foldedNavigationWidth
-    } else {
-      notificationBarOffsetLeft = this.state.navWidth
-    }
 
     return (
       <div
@@ -268,9 +377,6 @@ class Main extends React.Component {
             ignorePreviewPointerEvents={this.state.isRightSliderFocused}
           />
         </div>
-        <RealtimeNotification
-          style={{left: notificationBarOffsetLeft}}
-        />
       </div>
     )
   }

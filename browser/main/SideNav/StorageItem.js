@@ -1,4 +1,5 @@
-import React, { PropTypes } from 'react'
+import PropTypes from 'prop-types'
+import React from 'react'
 import CSSModules from 'browser/lib/CSSModules'
 import styles from './StorageItem.styl'
 import { hashHistory } from 'react-router'
@@ -7,10 +8,12 @@ import CreateFolderModal from 'browser/main/modals/CreateFolderModal'
 import RenameFolderModal from 'browser/main/modals/RenameFolderModal'
 import dataApi from 'browser/main/lib/dataApi'
 import StorageItemChild from 'browser/components/StorageItem'
-import eventEmitter from 'browser/main/lib/eventEmitter'
+import _ from 'lodash'
+import { SortableElement } from 'react-sortable-hoc'
+import i18n from 'browser/lib/i18n'
 
 const { remote } = require('electron')
-const { Menu, MenuItem, dialog } = remote
+const { Menu, dialog } = remote
 
 class StorageItem extends React.Component {
   constructor (props) {
@@ -22,31 +25,33 @@ class StorageItem extends React.Component {
   }
 
   handleHeaderContextMenu (e) {
-    let menu = new Menu()
-    menu.append(new MenuItem({
-      label: 'Add Folder',
-      click: (e) => this.handleAddFolderButtonClick(e)
-    }))
-    menu.append(new MenuItem({
-      type: 'separator'
-    }))
-    menu.append(new MenuItem({
-      label: 'Unlink Storage',
-      click: (e) => this.handleUnlinkStorageClick(e)
-    }))
+    const menu = Menu.buildFromTemplate([
+      {
+        label: i18n.__('Add Folder'),
+        click: (e) => this.handleAddFolderButtonClick(e)
+      },
+      {
+        type: 'separator'
+      },
+      {
+        label: i18n.__('Unlink Storage'),
+        click: (e) => this.handleUnlinkStorageClick(e)
+      }
+    ])
+
     menu.popup()
   }
 
   handleUnlinkStorageClick (e) {
-    let index = dialog.showMessageBox(remote.getCurrentWindow(), {
+    const index = dialog.showMessageBox(remote.getCurrentWindow(), {
       type: 'warning',
-      message: 'Unlink Storage',
-      detail: 'This work will just detatches a storage from Boostnote. (Any data won\'t be deleted.)',
-      buttons: ['Confirm', 'Cancel']
+      message: i18n.__('Unlink Storage'),
+      detail: i18n.__('This work will just detatches a storage from Boostnote. (Any data won\'t be deleted.)'),
+      buttons: [i18n.__('Confirm'), i18n.__('Cancel')]
     })
 
     if (index === 0) {
-      let { storage, dispatch } = this.props
+      const { storage, dispatch } = this.props
       dataApi.removeStorage(storage.key)
         .then(() => {
           dispatch({
@@ -67,7 +72,7 @@ class StorageItem extends React.Component {
   }
 
   handleAddFolderButtonClick (e) {
-    let { storage } = this.props
+    const { storage } = this.props
 
     modal.open(CreateFolderModal, {
       storage
@@ -75,51 +80,94 @@ class StorageItem extends React.Component {
   }
 
   handleHeaderInfoClick (e) {
-    let { storage } = this.props
+    const { storage } = this.props
     hashHistory.push('/storages/' + storage.key)
   }
 
   handleFolderButtonClick (folderKey) {
     return (e) => {
-      let { storage } = this.props
+      const { storage } = this.props
       hashHistory.push('/storages/' + storage.key + '/folders/' + folderKey)
     }
   }
 
   handleFolderButtonContextMenu (e, folder) {
-    let menu = new Menu()
-    menu.append(new MenuItem({
-      label: 'Rename Folder',
-      click: (e) => this.handleRenameFolderClick(e, folder)
-    }))
-    menu.append(new MenuItem({
-      type: 'separator'
-    }))
-    menu.append(new MenuItem({
-      label: 'Delete Folder',
-      click: (e) => this.handleFolderDeleteClick(e, folder)
-    }))
+    const menu = Menu.buildFromTemplate([
+      {
+        label: i18n.__('Rename Folder'),
+        click: (e) => this.handleRenameFolderClick(e, folder)
+      },
+      {
+        type: 'separator'
+      },
+      {
+        label: i18n.__('Export Folder'),
+        submenu: [
+          {
+            label: i18n.__('Export as txt'),
+            click: (e) => this.handleExportFolderClick(e, folder, 'txt')
+          },
+          {
+            label: i18n.__('Export as md'),
+            click: (e) => this.handleExportFolderClick(e, folder, 'md')
+          }
+        ]
+      },
+      {
+        type: 'separator'
+      },
+      {
+        label: i18n.__('Delete Folder'),
+        click: (e) => this.handleFolderDeleteClick(e, folder)
+      }
+    ])
+
     menu.popup()
   }
 
   handleRenameFolderClick (e, folder) {
-    let { storage } = this.props
+    const { storage } = this.props
     modal.open(RenameFolderModal, {
       storage,
       folder
     })
   }
 
+  handleExportFolderClick (e, folder, fileType) {
+    const options = {
+      properties: ['openDirectory', 'createDirectory'],
+      buttonLabel: i18n.__('Select directory'),
+      title: i18n.__('Select a folder to export the files to'),
+      multiSelections: false
+    }
+    dialog.showOpenDialog(remote.getCurrentWindow(), options,
+    (paths) => {
+      if (paths && paths.length === 1) {
+        const { storage, dispatch } = this.props
+        dataApi
+          .exportFolder(storage.key, folder.key, fileType, paths[0])
+          .then((data) => {
+            dispatch({
+              type: 'EXPORT_FOLDER',
+              storage: data.storage,
+              folderKey: data.folderKey,
+              fileType: data.fileType
+            })
+          })
+      }
+    })
+  }
+
   handleFolderDeleteClick (e, folder) {
-    let index = dialog.showMessageBox(remote.getCurrentWindow(), {
+    const index = dialog.showMessageBox(remote.getCurrentWindow(), {
       type: 'warning',
-      message: 'Delete Folder',
-      detail: 'This will delete all notes in the folder and can not be undone.',
-      buttons: ['Confirm', 'Cancel']
+      message: i18n.__('Delete Folder'),
+      detail: i18n.__('This will delete all notes in the folder and can not be undone.'),
+      buttons: [i18n.__('Confirm'), i18n.__('Cancel')]
     })
 
     if (index === 0) {
-      let { storage, dispatch } = this.props
+      const { storage, dispatch } = this.props
       dataApi
         .deleteFolder(storage.key, folder.key)
         .then((data) => {
@@ -142,48 +190,41 @@ class StorageItem extends React.Component {
     e.target.style.backgroundColor = e.dataTransfer.getData('defaultColor')
   }
 
+  dropNote (storage, folder, dispatch, location, noteData) {
+    noteData = noteData.filter((note) => folder.key !== note.folder)
+    if (noteData.length === 0) return
+
+    Promise.all(
+      noteData.map((note) => dataApi.moveNote(note.storage, note.key, storage.key, folder.key))
+    )
+    .then((createdNoteData) => {
+      createdNoteData.forEach((newNote) => {
+        dispatch({
+          type: 'MOVE_NOTE',
+          originNote: noteData.find((note) => note.content === newNote.content),
+          note: newNote
+        })
+      })
+    })
+    .catch((err) => {
+      console.error(`error on delete notes: ${err}`)
+    })
+  }
+
   handleDrop (e, storage, folder, dispatch, location) {
     e.target.style.opacity = '1'
     e.target.style.backgroundColor = e.dataTransfer.getData('defaultColor')
     const noteData = JSON.parse(e.dataTransfer.getData('note'))
-    const newNoteData = Object.assign({}, noteData, {storage: storage, folder: folder.key})
-    if (folder.key === noteData.folder) return
-    dataApi
-     .createNote(storage.key, newNoteData)
-     .then((note) => {
-       dataApi
-        .deleteNote(noteData.storage, noteData.key)
-        .then((data) => {
-          let dispatchHandler = () => {
-            dispatch({
-              type: 'DELETE_NOTE',
-              storageKey: data.storageKey,
-              noteKey: data.noteKey
-            })
-          }
-          eventEmitter.once('list:moved', dispatchHandler)
-          eventEmitter.emit('list:next')
-        })
-         .catch((err) => {
-           console.error(err)
-         })
-       dispatch({
-         type: 'UPDATE_NOTE',
-         note: note
-       })
-       hashHistory.push({
-         pathname: location.pathname,
-         query: {key: `${note.storage}-${note.key}`}
-       })
-     })
+    this.dropNote(storage, folder, dispatch, location, noteData)
   }
 
   render () {
-    let { storage, location, isFolded, data, dispatch } = this.props
-    let { folderNoteMap, trashedSet } = data
-    let folderList = storage.folders.map((folder) => {
-      let isActive = !!(location.pathname.match(new RegExp('\/storages\/' + storage.key + '\/folders\/' + folder.key)))
-      let noteSet = folderNoteMap.get(storage.key + '-' + folder.key)
+    const { storage, location, isFolded, data, dispatch } = this.props
+    const { folderNoteMap, trashedSet } = data
+    const SortableStorageItemChild = SortableElement(StorageItemChild)
+    const folderList = storage.folders.map((folder, index) => {
+      const isActive = !!(location.pathname.match(new RegExp('\/storages\/' + storage.key + '\/folders\/' + folder.key)))
+      const noteSet = folderNoteMap.get(storage.key + '-' + folder.key)
 
       let noteCount = 0
       if (noteSet) {
@@ -195,8 +236,9 @@ class StorageItem extends React.Component {
         noteCount = noteSet.size - trashedNoteCount
       }
       return (
-        <StorageItemChild
+        <SortableStorageItemChild
           key={folder.key}
+          index={index}
           isActive={isActive}
           handleButtonClick={(e) => this.handleFolderButtonClick(folder.key)(e)}
           handleContextMenu={(e) => this.handleFolderButtonContextMenu(e, folder)}
@@ -211,25 +253,25 @@ class StorageItem extends React.Component {
       )
     })
 
-    let isActive = location.pathname.match(new RegExp('\/storages\/' + storage.key + '$'))
+    const isActive = location.pathname.match(new RegExp('\/storages\/' + storage.key + '$'))
 
     return (
       <div styleName={isFolded ? 'root--folded' : 'root'}
         key={storage.key}
       >
         <div styleName={isActive
-            ? 'header--active'
-            : 'header'
-          }
+          ? 'header--active'
+          : 'header'
+        }
           onContextMenu={(e) => this.handleHeaderContextMenu(e)}
         >
           <button styleName='header-toggleButton'
             onMouseDown={(e) => this.handleToggleButtonClick(e)}
           >
-            <i className={this.state.isOpen
-                ? 'fa fa-caret-down'
-                : 'fa fa-caret-right'
-              }
+            <img src={this.state.isOpen
+              ? '../resources/icon/icon-down.svg'
+              : '../resources/icon/icon-right.svg'
+            }
             />
           </button>
 
@@ -237,7 +279,7 @@ class StorageItem extends React.Component {
             <button styleName='header-addFolderButton'
               onClick={(e) => this.handleAddFolderButtonClick(e)}
             >
-              <i className='fa fa-plus' />
+              <img styleName='iconTag' src='../resources/icon/icon-plus.svg' />
             </button>
           }
 
@@ -245,7 +287,7 @@ class StorageItem extends React.Component {
             onClick={(e) => this.handleHeaderInfoClick(e)}
           >
             <span styleName='header-info-name'>
-              {isFolded ? storage.name.substring(0, 1) : storage.name}
+              {isFolded ? _.truncate(storage.name, {length: 1, omission: ''}) : storage.name}
             </span>
             {isFolded &&
               <span styleName='header-info--folded-tooltip'>

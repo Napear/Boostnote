@@ -58,7 +58,7 @@ body
   .katex
     font 400 1.2em 'KaTeX_Main'
     line-height 1.2em
-    white-space nowrap
+    white-space initial
     text-indent 0
   .katex .mfrac>.vlist>span:nth-child(2)
     top 0 !important
@@ -76,7 +76,10 @@ body
     justify-content left
 li
   label.taskListItem
-    margin-left -2em
+    margin-left -1.8em
+    &.checked
+      text-decoration line-through
+      opacity 0.5
 div.math-rendered
   text-align center
 .math-failed
@@ -102,7 +105,6 @@ a
   border-radius 5px
   margin -5px
   transition .1s
-  display inline-block
   img
     vertical-align sub
   &:hover
@@ -117,8 +119,9 @@ hr
   margin 15px 0
 h1, h2, h3, h4, h5, h6
   font-weight bold
+  word-wrap break-word
 h1
-  font-size 2.25em
+  font-size 2.55em
   padding-bottom 0.3em
   line-height 1.2em
   border-bottom solid 1px borderColor
@@ -154,6 +157,7 @@ p
   line-height 1.6em
   margin 0 0 1em
   white-space pre-line
+  word-wrap break-word
 img
   max-width 100%
 strong, b
@@ -174,6 +178,8 @@ ul
   margin-bottom 1em
   li
     display list-item
+    &.taskListItem
+      list-style none
     p
       margin 0
   &>li>ul, &>li>ol
@@ -214,6 +220,7 @@ pre
     background-color white
   &.CodeMirror
     height initial
+    flex-wrap wrap
     &>code
       flex 1
       overflow-x auto
@@ -223,6 +230,13 @@ pre
     padding 0
     border none
     border-radius 0
+  &>span.filename
+    width 100%
+    border-radius: 5px 0px 0px 0px
+    margin -8px 100% 8px -8px
+    padding 0px 6px
+    background-color #777;
+    color white
   &>span.lineNumber
     display none
     font-size 1em
@@ -269,6 +283,16 @@ table
       border-color borderColor
       &:last-child
         border-right solid 1px borderColor
+kbd
+  background-color #fafbfc
+  border solid 1px borderColor
+  border-bottom-color btnColor
+  border-radius 3px
+  box-shadow inset 0 -1px 0 #959da5
+  display inline-block
+  font-size .8em
+  line-height 1
+  padding 3px 5px
 
 themeDarkBackground = darken(#21252B, 10%)
 themeDarkText = #f9f9f9
@@ -317,3 +341,33 @@ body[data-theme="dark"]
         border-color themeDarkTableBorder
         &:last-child
           border-right solid 1px themeDarkTableBorder
+  kbd
+    background-color themeDarkBorder
+    color themeDarkText
+
+themeSolarizedDarkTableOdd = $ui-solarized-dark-noteDetail-backgroundColor
+themeSolarizedDarkTableEven = darken($ui-solarized-dark-noteDetail-backgroundColor, 10%)
+themeSolarizedDarkTableHead = themeSolarizedDarkTableEven
+themeSolarizedDarkTableBorder = themeDarkBorder
+
+body[data-theme="solarized-dark"]
+  color $ui-solarized-dark-text-color
+  border-color themeDarkBorder
+  background-color $ui-solarized-dark-noteDetail-backgroundColor
+  table
+    thead
+      tr
+        background-color themeSolarizedDarkTableHead
+      th
+        border-color themeSolarizedDarkTableBorder
+        &:last-child
+          border-right solid 1px themeSolarizedDarkTableBorder
+    tbody
+      tr:nth-child(2n + 1)
+        background-color themeSolarizedDarkTableOdd
+      tr:nth-child(2n)
+        background-color themeSolarizedDarkTableEven
+      td
+        border-color themeSolarizedDarkTableBorder
+        &:last-child
+          border-right solid 1px themeSolarizedDarkTableBorder
